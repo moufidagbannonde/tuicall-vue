@@ -1,9 +1,11 @@
 import './assets/main.css'
 
-import ToastPlugin from 'vue-toast-notification'
+
 import { createApp } from 'vue'
 import App from './App.vue'
+import Toast from "primevue/toast";
+import ToastService from "primevue/toastservice";
 
 const app = createApp({});
 createApp(App).mount('#app')
-app.use(ToastPlugin);
+app.use(ToastService);

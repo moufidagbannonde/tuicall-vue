@@ -11,10 +11,14 @@
     "type-check": "vue-tsc --build --force"
   },
   "dependencies": {
+    "@primevue/themes": "^4.2.1",
     "@tencentcloud/call-uikit-vue": "^3.3.9",
     "@tencentcloud/chat": "^3.4.7",
     "aegis-web-sdk": "^1.39.2",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.2.1",
     "react-toastify": "^10.0.6",
+    "tuicall-vue": "file:",
     "vue": "^3.5.12",
     "vue-i18n": "^10.0.4",
     "vue-toast-notification": "^3.1.3",
