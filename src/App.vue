@@ -6,36 +6,52 @@
     <div class="w-full max-w-lg bg-white p-6 rounded-lg shadow-lg mb-8">
       <CallInit :onInit="init" />
       <CallControls :onCall="call" />
-    </div>
-
-    <!-- Bouton pour afficher le formulaire d'appel de groupe -->
-    <button v-if="!showGroupCallForm" @click="showGroupCallForm = true" 
-            class="w-full bg-blue-600 text-white font-semibold rounded-lg py-3 hover:bg-blue-700 shadow-md transition duration-200 ease-in-out">
-      Start Group Call
-    </button>
-
-    <!-- Champs pour entrer les utilisateurs pour un appel en groupe (affiché après le clic sur le bouton) -->
-    <div v-if="showGroupCallForm" class="group-call-container mt-8 w-full max-w-lg bg-white p-6 rounded-lg shadow-lg flex flex-col items-center transition-all duration-500 ease-in-out transform">
-      <input v-model="calleeUserIDs" type="text" placeholder="Enter comma-separated User IDs for group call"
-        class="border border-gray-300 rounded-lg p-3 w-full focus:border-blue-500 focus:ring focus:ring-blue-200 transition duration-200" />
-      
-      <!-- Bouton pour démarrer l'appel en groupe -->
-      <button @click="handleStartGroupCall"
+    <div 
+      class="group-call-container mt-8 w-full max-w-lg p-6 rounded-lg flex flex-col items-center transition-all duration-500 ease-in-out transform">
+      <!-- Bouton pour afficher le formulaire d'appel de groupe -->
+      <button v-if="!showGroupCallForm" @click="showGroupCallForm = true"
         class="mt-4 w-full bg-blue-600 text-white font-semibold rounded-lg py-3 hover:bg-blue-700 shadow-md transition duration-200 ease-in-out transform hover:-translate-y-1">
         Start Group Call
       </button>
-      
-      <!-- Bouton pour annuler l'appel de groupe et revenir en arrière -->
-      <button @click="cancelGroupCall"
-        class="mt-4 w-full bg-gray-600 text-white font-semibold rounded-lg py-3 hover:bg-gray-700 shadow-md transition duration-200 ease-in-out transform hover:-translate-y-1">
-        Cancel
-      </button>
     </div>
+  <!-- Champs pour entrer les utilisateurs pour un appel en groupe (affiché après le clic sur le bouton) -->
+  <div v-if="showGroupCallForm"
+    class="group-call-container mt-8 w-full max-w-lg bg-white p-6 rounded-lg shadow-lg flex flex-col items-center transition-all duration-500 ease-in-out transform">
+    <input v-model="calleeUserIDs" type="text" placeholder="Enter comma-separated User IDs for group call"
+      class="border border-gray-300 rounded-lg p-3 w-full focus:border-blue-500 focus:ring focus:ring-blue-200 transition duration-200" />
+
+    <!-- Bouton pour démarrer l'appel en groupe -->
+    <button @click="handleStartGroupCall"
+      class="mt-4 w-full bg-blue-600 text-white font-semibold rounded-lg py-3 hover:bg-blue-700 shadow-md transition duration-200 ease-in-out transform hover:-translate-y-1">
+      Start Group Call
+    </button>
+
+    <!-- Bouton pour annuler l'appel de groupe et revenir en arrière -->
+    <button @click="cancelGroupCall"
+      class="mt-4 w-full bg-gray-600 text-white font-semibold rounded-lg py-3 hover:bg-gray-700 shadow-md transition duration-200 ease-in-out transform hover:-translate-y-1">
+      Cancel
+    </button>
+  </div>
+    </div>
+
+
 
     <!-- TUICallKit Component -->
     <div class="TUICallKit w-full flex justify-center items-center mt-8">
       <TUICallKit v-if="isCalleeInitialized" class="w-full bg-white bg-opacity-80 rounded-xl shadow-xl transition-all duration-500 ease-in-out transform hover:scale-105
                h-80 md:h-[28rem] lg:h-[35rem] xl:h-[48rem] max-w-sm md:max-w-4xl lg:max-w-5xl xl:max-w-6xl" />
+      <!--partage d'écran-->
+      <div class="call-container" v-if="isCallStarted">
+        <!-- Boutons pour démarrer et arrêter le partage d'écran -->
+        <button @click="startScreenShare">Démarrer le partage d'écran</button>
+        <button @click="stopScreenShare">Arrêter le partage d'écran</button>
+
+        <!-- Affichage du flux vidéo local (partage d'écran) -->
+        <video id="screen-share" autoplay></video>
+
+
+      </div>
+
     </div>
   </div>
 </template>
@@ -47,6 +63,9 @@ import CallInit from './components/CallInit.vue';
 import CallControls from './components/CallControls.vue';
 import * as GenerateTestUserSig from './debug/GenerateTestUserSig-es';
 import Chat from "@tencentcloud/chat";
+import { useToast } from 'vue-toastification';
+import TRTC from 'trtc-js-sdk';
+
 
 // Constantes et variables réactives
 const SDKAppID = 20013712;
@@ -57,11 +76,14 @@ const calleeUserIDs = ref(''); // IDs d'utilisateurs pour l'appel de groupe, sé
 const groupID = ref(''); // Stockage dynamique du groupID généré
 const selectedCallType = ref(TUICallType.VIDEO_CALL); // Par défaut, l'appel de groupe est un appel vidéo
 const showGroupCallForm = ref(false); // Variable qui contrôle l'affichage du formulaire d'appel de groupe
+const toast = useToast();
+// Référence au flux d'écran local
+const screenStream = ref(null);
 
 // Initialisation de l'appelant
 const init = async (callerUserID) => {
   if (!callerUserID) {
-    alert("Veuillez entrer un utilisateur ID valide!");
+    toast.error("Veuillez entrer un utilisateur ID valide!");
   } else {
     const { userSig } = GenerateTestUserSig.genTestUserSig({
       userID: callerUserID,
@@ -74,7 +96,7 @@ const init = async (callerUserID) => {
       userSig,
       SDKAppID
     });
-    alert("TUICallKit initialisé avec succès !");
+    toast.success("TUICallKit initialisé avec succès !");
     isCalleeInitialized.value = true;
   }
 };
@@ -82,15 +104,15 @@ const init = async (callerUserID) => {
 // Fonction d'appel
 const call = async (calleeUserID, callType) => {
   if (!calleeUserID) {
-    alert("Veuillez entrer l'identifiant de l'appelé");
+    toast.error("Veuillez entrer l'identifiant de l'appelé");
   } else if (!isCalleeInitialized.value) {
-    alert("L'utilisateur appelé n'a pas encore initialisé TUICallKit.");
+    toast.error("L'utilisateur appelé n'a pas encore initialisé TUICallKit.");
   } else {
     await TUICallKitServer.call({
       userID: calleeUserID,
       type: callType
     });
-    alert("Appel en cours...");
+    toast.info("Appel en cours...");
     isCallStarted.value = true;  // L'appel a commencé, donc afficher le formulaire d'appel de groupe
   }
 };
@@ -111,6 +133,10 @@ async function createGroupID() {
   return groupID.value;
 }
 
+
+
+
+
 // Démarrer un appel en groupe
 async function startGroupCall(callType) {
   if (!groupID.value) {
@@ -121,7 +147,7 @@ async function startGroupCall(callType) {
   try {
     const userIDList = calleeUserIDs.value.split(',').map(id => id.trim()).filter(id => id);
     if (userIDList.length === 0) {
-      alert("Veuillez entrer au moins un utilisateur ID pour l'appel de groupe.");
+      toast.error("Veuillez entrer au moins un utilisateur ID pour l'appel de groupe.");
       return;
     }
 
@@ -130,7 +156,7 @@ async function startGroupCall(callType) {
       groupID: groupID.value,
       type: callType
     });
-    alert("Appel de groupe en cours...");
+    toast.info("Appel de groupe en cours...");
 
   } catch (error) {
     console.error(`[TUICallKit] Échec de l'appel de groupe, Raison : ${error}`);
@@ -152,6 +178,43 @@ const cancelGroupCall = () => {
   showGroupCallForm.value = false;  // Fermer le formulaire d'appel de groupe
   calleeUserIDs.value = '';  // Réinitialiser les IDs des utilisateurs
 };
+
+
+// Initialiser TRTC
+const trtc = async (callerUserID) => TRTC.createClient({
+  mode: 'video_call',
+  sdkAppId: SDKAppID,
+  userId: callerUserID,
+  userSig
+});
+
+const startScreenShare = async () => {
+  try {
+    // Demander à l'utilisateur de sélectionner l'écran à partager
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    screenStream.value = stream;
+
+  
+    // Afficher le flux vidéo du partage d'écran dans un élément vidéo
+    const screenShareVideo = document.getElementById('screen-share');
+    screenShareVideo.srcObject = stream;
+
+    console.log("Partage d'écran démarré");
+  } catch (error) {
+    console.error("Erreur de partage d'écran:", error);
+  }
+};
+
+const stopScreenShare = () => {
+  if (screenStream.value) {
+    screenStream.value.getTracks().forEach(track => track.stop());
+    const screenShareVideo = document.getElementById('screen-share');
+    screenShareVideo.srcObject = null;
+    screenStream.value = null;
+    console.log("Partage d'écran arrêté");
+  }
+};
+
 </script>
 
 <style scoped>
@@ -169,14 +232,30 @@ const cancelGroupCall = () => {
 /* Transition pour déplacer la section du groupe d'appel en bas après le lancement de l'appel */
 .group-call-container {
   transition: transform 0.5s ease-in-out;
-  margin-top: 20px; 
+  margin-top: 20px;
 }
 
-.group-call-container.v-enter-active, .group-call-container.v-leave-active {
+.group-call-container.v-enter-active,
+.group-call-container.v-leave-active {
   transition: transform 0.5s ease-in-out;
 }
 
-.group-call-container.v-enter, .group-call-container.v-leave-to {
-  transform: translateY(50px); /* Le formulaire est décalé vers le bas uniquement après le lancement de l'appel */
+.group-call-container.v-enter,
+.group-call-container.v-leave-to {
+  transform: translateY(50px);
+  /* Le formulaire est décalé vers le bas uniquement après le lancement de l'appel */
+}
+
+#screen-share {
+  width: 100%;
+  height: 400px;
+  background-color: black;
+}
+
+
+button {
+  padding: 10px 20px;
+  margin: 5px;
+  cursor: pointer;
 }
 </style>
