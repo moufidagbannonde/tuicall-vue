@@ -20,6 +20,7 @@
     "primevue": "^4.2.1",
     "react-toastify": "^10.0.6",
     "socket.io-client": "^4.8.1",
+    "tim-js-sdk": "^2.27.6",
     "trtc-js-sdk": "^4.15.22",
     "tuicall-vue": "file:",
     "vue": "^3.5.12",
@@ -31,7 +32,7 @@
   "devDependencies": {
     "@tsconfig/node22": "^22.0.0",
     "@types/node": "^22.9.0",
-    "@vitejs/plugin-vue": "^5.1.4",
+    "@vitejs/plugin-vue": "^5.2.0",
     "@vue/tsconfig": "^0.5.1",
     "autoprefixer": "^10.4.20",
     "npm-run-all2": "^7.0.1",
