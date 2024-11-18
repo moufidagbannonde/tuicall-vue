@@ -66,35 +66,28 @@
         <!-- Contrôles de partage d'écran -->
         <div class="screen-share-controls flex space-x-4 mt-8" v-if="isCalleeInitialized">
           <!-- Bouton de partage d'écran -->
-          <button @click="startScreenShare" :disabled="isScreenSharing || currentScreenSharer !== currentUserID" class="px-8 py-4 rounded-xl font-bold text-white
-    bg-gradient-to-r from-blue-500 to-indigo-600
-    hover:from-blue-600 hover:to-indigo-700
-    transform hover:-translate-y-1 transition-all duration-300
-    shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
-    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" v-if="isCalleeInitialized">
+          <button @click="startScreenShare" class="px-8 py-4 rounded-xl font-bold text-white
+                  bg-gradient-to-r from-blue-500 to-indigo-600
+                  hover:from-blue-600 hover:to-indigo-700
+                  transform hover:-translate-y-1 transition-all duration-300
+                  shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+            :disabled="isScreenSharing || currentScreenSharer === currentUserID">
             Partager l'écran
           </button>
-          <!--bouton d'arrêt de partage d'écran-->
+          <!-- bouton d'arrêt de partage d'écran -->
           <button @click="stopScreenCapture" :disabled="!isScreenSharing || currentScreenSharer !== currentUserID"
             class="px-8 py-4 rounded-xl font-bold text-white
-    bg-gradient-to-r from-red-500 to-red-600
-    hover:from-red-600 hover:to-red-700
-    transform hover:-translate-y-1 transition-all duration-300
-    shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
-    focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
+              bg-gradient-to-r from-red-500 to-red-600
+              hover:from-red-600 hover:to-red-700
+              transform hover:-translate-y-1 transition-all duration-300
+              shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
+              focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
             Arrêter le partage
           </button>
         </div>
       </div>
-      <ChatComponent 
-      v-if="isCallStarted"
-      :current-user-id="currentUserID"
-      :is-call-active="isCallStarted"
-      :group-id="String(roomId)" 
-    />
     </div>
-
-
     <div class="flex justify-center w-full">
       <div ref="remoteContainer" id="remoteContainer" class="w-full max-w-4xl mt-8 p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 
       bg-opacity-90 backdrop-blur-lg  shadow-2xl 
@@ -117,15 +110,16 @@ import Chat from "@tencentcloud/chat";
 import { useToast } from 'vue-toastification';
 import TRTC from 'trtc-js-sdk';
 import ConfirmModal from './components/ConfirmModal.vue';
-import ChatComponent from './components/ChatComponent.vue';
 
 // variables d'accès à l'API Tencent Cloud
-const SDKAppID = 20014601; 
+const SDKAppID = 20014601;
 const SDKSecretKey = "76511b9b4c801d3ae63d3cdee238b8f201d148a73e464267e2c6e54b597422f8";
 
+// const SDKAppID = 0;
+// const SDKSecretKey = "";
 
 // variables globales
-const isCallActive = ref(false); 
+const isCallActive = ref(false);
 const isCalleeInitialized = ref(false);
 const isCallStarted = ref(false);
 const calleeUserIDs = ref('');
@@ -149,48 +143,30 @@ let client = ref(null);
 /**
  *  cycles de vie
  */
-
 // chargement du composant
 onMounted(() => {
-  initTRTC();
+  initTRTC(); // initialisation de TRTC
 });
 
-// Ajouter un gestionnaire pour les messages personnalisés
-onMounted(() => {
-  if (client.value) {
-    client.value.on('message', (event) => {
-      if (event.data?.type === 'chat') {
-        // Le composant Chat gère déjà les messages
-        console.log('Message reçu:', event);
-      }
-    });
-  }
-});
-
-onUnmounted(() => {
-  if (client.value) {
-    client.value.off('message');
-  }
-});
 
 // démontage du composant
 onUnmounted(() => {
-  cleanup();
-  leaveRoom();
+  cleanup(); // nettoyage des états
+  leaveRoom(); // déconnexion de la salle
 })
 
 // initialisation TRTC
 async function initTRTC(callerUserID) {
   const userID = String(callerUserID);
 
-
-  // Générer le userSig(signature d'utilisateur) et extraire la chaîne
+  // Génération du userSig(signature d'utilisateur) 
   const { userSig } = GenerateTestUserSig.genTestUserSig({
     userID: userID,
     SDKAppID,
     SecretKey: SDKSecretKey
   });
 
+  // création du client TRTC
   client.value = TRTC.createClient({
     mode: 'rtc',
     sdkAppId: SDKAppID,
@@ -219,7 +195,7 @@ async function initTRTC(callerUserID) {
       clientId: client.value.userId
     });
 
-    // Non affichage du propre flux de partage d'écran
+    // Non affichage du propre flux de partage d'écran (flux local)
     if (userId === client.value.userId) {
       console.log('Ignorer l\'affichage du flux local');
       return;
@@ -245,6 +221,7 @@ async function initTRTC(callerUserID) {
   });
 
   try {
+    // connexion à la salle
     await client.value.join({ roomId: roomID.value });
     isTRTCInitialized.value = true;
     toast.success("Connecté à la salle avec succès !");
@@ -259,11 +236,13 @@ async function initTRTC(callerUserID) {
  */
 async function startScreenShare() {
   try {
-    if (currentScreenSharer.value) {
+    // vérification si un partage d'écran est déjà en cours
+    if (isScreenSharing.value) {
       toast.warning("Un partage d'écran est déjà en cours");
       return;
     }
 
+    // création du stream de partage d'écran
     screenStream.value = await TRTC.createStream({
       screen: true,
       screenAudio: true,
@@ -300,7 +279,11 @@ watch(currentScreenSharer, (newVal) => {
 // watch pour surveiller les changements de l'appel
 watch(isCallStarted, (newValue) => {
   console.log("La valeur de isCallStarted a changé et est maintenant : ", newValue);
-})
+  if (newValue) {
+    isCallActive.value = true;
+  }
+});
+
 
 /**
  * permet de nettoyer le flux distant
@@ -314,7 +297,7 @@ function cleanupRemoteStream(streamId) {
 }
 
 /**
- * permet de quitter la salle , c'est-à-dire la déconnexion 
+ * permet la déconnexion , c'est-à-dire de quitter la salle 
  */
 async function leaveRoom() {
   if (client.value) {
@@ -440,6 +423,7 @@ const init = async (callerUserID) => {
 const handleInit = async (userID) => {
   try {
     await init(userID);
+    currentUserID.value = userID;
     // autres actions après l'initialisation si nécessaire
   } catch (error) {
     console.error("Erreur lors de l'initialisation:", error);
@@ -480,11 +464,6 @@ const call = async (calleeUserID, callType) => {
     return;
   }
 
-  if (!isCalleeInitialized.value) {
-    toast.error("L'utilisateur appelé n'a pas encore initialisé TUICallKit.");
-    return;
-  }
-
   try {
     // Vérifier si la caméra est disponible pour les appels vidéo
     if (callType === TUICallType.VIDEO_CALL) {
@@ -492,7 +471,6 @@ const call = async (calleeUserID, callType) => {
       const hasCamera = devices.some(device => device.kind === 'videoinput');
 
       if (!hasCamera) {
-        // Stocker les informations d'appel en attente
         pendingCalleeUserID.value = calleeUserID;
         pendingCallType.value = callType;
         showNoCameraModal.value = true;
@@ -514,7 +492,12 @@ const call = async (calleeUserID, callType) => {
     toast.info("Appel en cours...");
   } catch (error) {
     console.error("Erreur lors de l'appel:", error);
-    toast.error(`Erreur: ${error.message}`);
+    // Vérifier si l'erreur contient le message 
+    if (error.message && error.message.includes("Invalid sender or receiver identifier")) {
+      toast.error("L'utilisateur appelé n'a pas encore initialisé TUICallKit");
+    } else {
+      toast.error(`Erreur: ${error.message}`);
+    }
   }
 };
 
@@ -550,6 +533,9 @@ const handleCallEnd = () => {
   isCallStarted.value = false;
   isCallActive.value = false;
 
+  if (!isCallActive.value) {
+    isCallStarted.value = false;
+  }
   if (screenStream.value || isScreenSharing.value) {
     stopScreenCapture();
   }
@@ -571,7 +557,7 @@ const handleError = (error) => {
   toast.error(`Erreur: ${error.message}`);
 };
 
-// permet de créer un groupe d'utilisateurs
+// permet de créer un groupe d'utilisateurs pour l'appel en groupe
 const createGroupID = async () => {
   const chat = Chat.create({ SDKAppID });
   const userIDList = calleeUserIDs.value.split(',').map(id => id.trim()).filter(id => id);
@@ -590,6 +576,7 @@ const startGroupCall = async (callType) => {
     return;
   }
   try {
+    // suppression des espaces et des doublons
     const userIDList = calleeUserIDs.value.split(',').map(id => id.trim()).filter(id => id);
     if (!userIDList.length) {
       toast.error("Veuillez entrer au moins un utilisateur ID.");

@@ -47,14 +47,18 @@
 import TIM from 'tim-js-sdk';
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useToast } from 'vue-toastification';
-import * as GeneratTestUserSig from '../debug/GenerateTestUserSig-es';
+import * as GenerateTestUserSig from '../debug/GenerateTestUserSig-es';
 
 const SDKAppID = 20014601;
 const SDKSecretKey = "76511b9b4c801d3ae63d3cdee238b8f201d148a73e464267e2c6e54b597422f8";
 const props = defineProps({
     currentUserId: {
         type: String,
-        required: true
+        required: true,
+        validator: (value) => {
+            console.log('Validation currentUserId:', value);
+            return value && typeof value === 'string' && value.length > 0;
+        }
     },
     isCallActive: {
         type: Boolean,
@@ -62,13 +66,17 @@ const props = defineProps({
     },
     groupId: {
         type: String,
-        required: true
+        required: true,
+        validator: (value) => {
+            console.log('Validation groupId:', value);
+            return value && typeof value === 'string' && value.length > 0;
+        }
     }
 });
 
 const toast = useToast();
 const tim = TIM.create({
-    SDKAppID: SDKAppID // Utilisez votre SDKAppID
+    SDKAppID: SDKAppID
 });
 
 const isExpanded = ref(false);
@@ -93,26 +101,35 @@ const formatTime = (timestamp) => {
 };
 
 const sendMessage = async () => {
-    if (!newMessage.value.trim() || !props.isCallActive) return;
+    if (!newMessage.value.trim() || !isInitialized.value) {
+        console.log('Message vide ou chat non initialisé');
+        return;
+    }
 
     try {
-        const message = tim.createTextMessage({
+        const messageText = newMessage.value.trim();
+        console.log('Envoi du message:', {
             to: props.groupId,
+            text: messageText
+        });
+
+        const message = tim.createTextMessage({
+            to: String(props.groupId),
             conversationType: TIM.TYPES.CONV_GROUP,
             payload: {
-                text: newMessage.value.trim()
+                text: messageText
             }
         });
 
         await tim.sendMessage(message);
+        messages.value.push(message);
         newMessage.value = '';
         scrollToBottom();
     } catch (error) {
-        console.error('Erreur lors de l\'envoi du message:', error);
-        toast.error('Erreur lors de l\'envoi du message');
+        console.error('Erreur d\'envoi:', error);
+        toast.error('Erreur d\'envoi du message');
     }
 };
-
 const scrollToBottom = () => {
     if (messagesContainer.value) {
         setTimeout(() => {
@@ -130,6 +147,53 @@ const handleMessageReceived = (event) => {
     scrollToBottom();
 };
 
+
+const loginTIM = async () => {
+    try {
+        if (!props.currentUserId || !props.groupId) {
+            throw new Error('Props manquantes pour l\'initialisation');
+        }
+
+        console.log('Initialisation TIM avec:', {
+            userId: props.currentUserId,
+            groupId: props.groupId,
+            types: {
+                userId: typeof props.currentUserId,
+                groupId: typeof props.groupId
+            }
+        });
+
+        const { userSig } = GenerateTestUserSig.genTestUserSig({
+            userID: String(props.currentUserId),
+            SDKAppID: Number(SDKAppID),
+            SecretKey: SDKSecretKey
+        });
+
+        await tim.login({
+            userID: String(props.currentUserId),
+            userSig: userSig
+        });
+
+        try {
+            await tim.joinGroup({
+                groupID: String(props.groupId),
+                type: TIM.TYPES.GRP_AVCHATROOM
+            });
+        } catch (error) {
+            if (error.code !== 10013) {
+                throw error;
+            }
+        }
+
+        isInitialized.value = true;
+    } catch (error) {
+        console.error('Erreur d\'initialisation du chat:', error);
+        toast.error(`Erreur d'initialisation: ${error.message}`);
+        throw error;
+    }
+};
+
+
 watch(messages, (newMessages, oldMessages) => {
     if (!isExpanded.value && oldMessages && newMessages.length > oldMessages.length) {
         unreadCount.value++;
@@ -137,41 +201,25 @@ watch(messages, (newMessages, oldMessages) => {
 });
 
 onMounted(async () => {
-    const userID = String(props.currentUserId);
-   const { userSig } = GeneratTestUserSig.genTestUserSig({
-    userID:userID,
-    SDKAppID,
-    SecretKey: SDKSecretKey
-   })
+    console.log('Montage du composant avec props:', {
+        currentUserId: props.currentUserId,
+        groupId: props.groupId,
+        isCallActive: props.isCallActive
+    });
 
     try {
-        await tim.login({
-            userID,
-           userSig
-        });
-
+        await loginTIM();
         tim.on(TIM.EVENT.MESSAGE_RECEIVED, handleMessageReceived);
-
-        // Rejoindre le groupe
-        await tim.joinGroup({ groupID: props.groupId });
-
-        // Charger l'historique des messages
-        const { data: { messageList } } = await tim.getMessageList({
-            conversationID: `GROUP${props.groupId}`,
-            count: 15
-        });
-
-        messages.value = messageList;
-        scrollToBottom();
     } catch (error) {
-        console.error('Erreur d\'initialisation du chat:', error);
-        toast.error('Erreur d\'initialisation du chat');
+        console.error('Erreur lors du montage:', error);
     }
 });
 
 onUnmounted(() => {
-    tim.off(TIM.EVENT.MESSAGE_RECEIVED, handleMessageReceived);
-    tim.logout();
+    if (tim) {
+        tim.off(TIM.EVENT.MESSAGE_RECEIVED);
+        tim.logout();
+    }
 });
 </script>
 

@@ -1,33 +1,49 @@
-# tuicall-vue
+# *Application d'Appel Vidéo/Audio*
 
-This template should help get you started developing with Vue 3 in Vite.
+Cette application permet de passer des appels vidéo et audio en utilisant l'API Tencent Cloud. Elle offre les fonctionnalités suivantes :
+- Appels vidéo et audio en tête-à-tête
+- Appels de groupe
+- Partage d'écran
 
-## Recommended IDE Setup
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## *Prérequis*
 
-## Type Support for `.vue` Imports in TS
+Avant de pouvoir exécuter l'application, vous devez :
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+1. Avoir installé sur votre machine :
+   - Node.js (version 18 ou supérieure)
+   - npm
+2. Avoir un compte Tencent Cloud et obtenir :
+   - SDKAppID
+   - SDKSecretKey
+3. Lancer la commande `npm install` pour installer les dépendances
+4. Dans le fichier `src/App.vue`, remplacez les valeurs suivantes par vos identifiants Tencent Cloud :
 
-## Customize configuration
+````js
+const SDKAppID = 0; // Remplacez par votre SDKAppID
+const SecretKey = ''; // Remplacez par votre SecretKey
+````
+5. Démarrer le serveur de l'application en lançant la commande `npm run dev`
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+## *Utilisation*
 
-## Project Setup
+1. Entrez/Créez votre identifiant utilisateur pour initialiser l'application
+2. Pour un appel en tête-à-tête :
+   - Entrez l'identifiant de l'utilisateur que vous souhaitez appeler (en ayant initialisé l'application avec son identifiant)
+   - Choisissez entre un appel vidéo ou audio
+   
+3. Pour un appel de groupe :
+   - Cliquez sur "Start Group Call"
+   - Entrez les identifiants  des participants que vous souhaitez appeler ,séparés par des virgules
+   - Cliquez sur "Start Group Call" pour démarrer l'appel
 
-```sh
-npm install
-```
+4. Pendant un appel :
+   - Vous pouvez partager votre écran en cliquant sur "Partager l'écran"
+   - Pour arrêter le partage, cliquez sur "Arrêter le partage"
 
-### Compile and Hot-Reload for Development
+## Notes importantes
 
-```sh
-npm run dev
-```
+- Pour les appels vidéo, une caméra et un microphone sont requis , pour les appels audio, un microphone est requis [En cas d'absence de caméra, l'appel se fera en audio uniquement]
+- Pour le partage d'écran, le navigateur doit supporter cette fonctionnalité
 
-### Type-Check, Compile and Minify for Production
 
-```sh
-npm run build
-```

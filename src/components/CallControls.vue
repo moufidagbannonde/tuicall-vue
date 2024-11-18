@@ -22,7 +22,7 @@
 
     <!-- Boutons d'appel -->
     <div class="flex flex-col sm:flex-row gap-4 w-full">
-      <!-- Bouton Audio -->
+      <!-- Bouton d'appel audio -->
       <button
         @click="makeCall(1)"
         class="group relative flex-1 px-6 py-4 bg-gradient-to-r from-green-400 to-emerald-500
@@ -40,7 +40,7 @@
         </div>
       </button>
 
-      <!-- Bouton Vidéo -->
+      <!-- Bouton d'appel vidéo -->
       <button
         @click="makeCall(2)"
         class="group relative flex-1 px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600
@@ -75,40 +75,5 @@ const makeCall = (callType) => {
 };
 </script>
 <style scoped>
-/* effet de survol des boutons */
-@keyframes pulse-border {
-  0% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
-  }
-}
-
-.hover\:shadow-3xl {
-  --tw-shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.3);
-  box-shadow: var(--tw-shadow);
-}
-
-/* l'input en focus */
-input:focus {
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-}
-
-/*  icônes des boutons */
-.group:hover svg {
-  animation: bounce 0.5s ease-in-out;
-}
-
-@keyframes bounce {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-3px);
-  }
-}
+@import '../assets/callcontrols.css';
 </style>

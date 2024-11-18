@@ -9,6 +9,7 @@
       <h3 class="text-xl font-bold text-gray-800 mb-4">{{ title }}</h3>
       <p class="text-gray-600 mb-8 leading-relaxed">{{ message }}</p>
       
+      <!-- boutons de confirmation et d'annulation -->
       <div class="flex justify-end space-x-4">
         <button @click="onCancel" 
           class="px-6 py-2.5 rounded-lg text-gray-600 hover:bg-gray-100 
@@ -47,6 +48,3 @@ const onConfirm = () => emit('confirm');
 const onCancel = () => emit('cancel');
 </script>
 
-<style scoped>
-
-</style>
