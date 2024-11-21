@@ -1,11 +1,13 @@
 import libGenerateTestUsersigEsMin from "./lib-generate-test-usersig-es.min";
 
-let SDKAppId = 20014601;
-let SecretKey = "76511b9b4c801d3ae63d3cdee238b8f201d148a73e464267e2c6e54b597422f8";
 
 // let SDKAppId = 0; 
 // let SecretKey = '';
-const EXPIRETIME = 1296000; // 15 * 24 * 60 * 60 secondes = 15 jours
+
+let SDKAppId = 20014657;
+let SecretKey = "12fba7aae1b6b78f680f2fd13fd8a12bd9015b97f2b35ef194bb2996dcf1bbc8";
+
+const EXPIRETIME = 1296000; // 15 * 24 * 60 * 60 secondes = 15 days(jours)
 
 export function genTestUserSig(params){
     if(params.SDKAppId) SDKAppId = params.SDKAppId;

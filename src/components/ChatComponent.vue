@@ -1,342 +1,243 @@
 <template>
-    <div class="chat-container" :class="{ 'chat-expanded': isExpanded }">
-        <!-- Bouton pour afficher/masquer le chat -->
-        <button @click="toggleChat" class="chat-toggle-btn">
-            <span v-if="!isExpanded">💬</span>
-            <span v-else>&times;</span>
-            <span v-if="unreadCount && !isExpanded" class="unread-badge">
-                {{ unreadCount }}
-            </span>
-        </button>
-
-        <!-- Panneau de chat -->
-        <div v-show="isExpanded" class="chat-panel">
-            <!-- En-tête du chat -->
-            <div class="chat-header">
-                <h3>Chat</h3>
-                <div class="chat-actions">
-                    <button @click="scrollToBottom" title="Aller en bas">⬇️</button>
-                </div>
+    <div class="uk-container">
+        <div class="uk-card uk-card-default uk-card-body chat-container">
+            <!-- Indicateur de statut d'appel -->
+            <div class="uk-alert"
+                :class="{ 'uk-alert-success': props.callActive, 'uk-alert-warning': !props.callActive }">
+                {{ props.callActive ? 'Appel en cours' : 'Appel déconnecté' }}
             </div>
-
-            <!-- Messages -->
-            <div ref="messagesContainer" class="messages-container">
-                <div v-for="message in messages" :key="message.ID" class="message"
-                    :class="{ 'message-own': message.from === currentUserId }">
-                    <div class="message-header">
-                        <span class="message-sender">{{ message.from === currentUserId ? 'Vous' : message.from }}</span>
-                        <span class="message-time">{{ formatTime(message.time) }}</span>
+            <!-- Zone des messages -->
+            <div class="messages-area uk-margin" ref="messagesContainer">
+                <div v-for="(message, index) in messages" :key="index"
+                    :class="['uk-margin-small', message.isMe ? 'my-message' : 'other-message']">
+                    <div class="uk-card uk-card-primary uk-card-small uk-card-body">
+                        <p class="uk-margin-remove">{{ message.text }}</p>
+                        <small class="uk-text-muted">{{ message.time }}</small>
                     </div>
-                    <div class="message-content">{{ message.payload?.text }}</div>
                 </div>
             </div>
 
-            <!-- Zone de saisie -->
-            <div class="chat-input-container">
-                <input v-model="newMessage" @keyup.enter="sendMessage" placeholder="Écrivez votre message..."
-                    :disabled="!isCallActive" />
-                <button @click="sendMessage" :disabled="!isCallActive || !newMessage.trim()">
-                    Envoyer
-                </button>
+            <!-- Zone de saisie de message-->
+            <div class="uk-margin">
+                <div class="uk-inline uk-width-1-1">
+                    <input v-model="newMessage" @keyup.enter="sendMessage" class="uk-input" type="text"
+                        placeholder="Écrivez votre message...">
+                    <button @click="sendMessage" class="uk-button uk-button-primary">
+                        Envoyer
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 </template>
+<script setup lang="ts">
+// import des fonctions de vue
+import { ref, nextTick, onMounted } from 'vue'
 
-<script setup>
-import TIM from 'tim-js-sdk';
-import { ref, onMounted, onUnmounted, watch } from 'vue';
-import { useToast } from 'vue-toastification';
-import * as GenerateTestUserSig from '../debug/GenerateTestUserSig-es';
+// interface pour les messages
+interface Message {
+    text: string
+    time: string
+    isMe: boolean
+}
 
-const SDKAppID = 20014601;
-const SDKSecretKey = "76511b9b4c801d3ae63d3cdee238b8f201d148a73e464267e2c6e54b597422f8";
-const props = defineProps({
-    currentUserId: {
-        type: String,
-        required: true,
-        validator: (value) => {
-            console.log('Validation currentUserId:', value);
-            return value && typeof value === 'string' && value.length > 0;
-        }
-    },
-    isCallActive: {
-        type: Boolean,
-        default: false
-    },
-    groupId: {
-        type: String,
-        required: true,
-        validator: (value) => {
-            console.log('Validation groupId:', value);
-            return value && typeof value === 'string' && value.length > 0;
-        }
+//  props pour recevoir les messages externes
+const props = defineProps<{
+    callActive: boolean
+}>()
+
+// Ajout des émetteurs d'événements
+const emit = defineEmits<{
+    (e: 'message-sent', message: string): void
+}>()
+
+const messages = ref<Message[]>([])
+const newMessage = ref('')
+const messagesContainer = ref<HTMLElement | null>(null)
+
+const sendMessage = () => {
+    if (!props.callActive) {
+        alert('Impossible d\'envoyer un message : appel non actif')
+        return
     }
-});
+    if (newMessage.value.trim()) {
+        // Création du message local
+        messages.value.push({
+            text: newMessage.value,
+            time: new Date().toLocaleTimeString(),
+            isMe: true
+        })
 
-const toast = useToast();
-const tim = TIM.create({
-    SDKAppID: SDKAppID
-});
+        // Émission du message vers le composant parent
+        emit('message-sent', newMessage.value)
 
-const isExpanded = ref(false);
-const messages = ref([]);
-const newMessage = ref('');
-const unreadCount = ref(0);
-const messagesContainer = ref(null);
-
-const toggleChat = () => {
-    isExpanded.value = !isExpanded.value;
-    if (isExpanded.value) {
-        unreadCount.value = 0;
-        scrollToBottom();
+        newMessage.value = ''
+        nextTick(() => {
+            scrollToBottom()
+        })
     }
-};
+}
 
-const formatTime = (timestamp) => {
-    return new Date(timestamp * 1000).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-};
+// Ajout d'une méthode pour recevoir les messages externes
+const receiveMessage = (text: string) => {
+    messages.value.push({
+        text,
+        time: new Date().toLocaleTimeString(),
+        isMe: false
+    })
+    nextTick(() => {
+        scrollToBottom()
+    })
+}
 
-const sendMessage = async () => {
-    if (!newMessage.value.trim() || !isInitialized.value) {
-        console.log('Message vide ou chat non initialisé');
-        return;
-    }
-
-    try {
-        const messageText = newMessage.value.trim();
-        console.log('Envoi du message:', {
-            to: props.groupId,
-            text: messageText
-        });
-
-        const message = tim.createTextMessage({
-            to: String(props.groupId),
-            conversationType: TIM.TYPES.CONV_GROUP,
-            payload: {
-                text: messageText
-            }
-        });
-
-        await tim.sendMessage(message);
-        messages.value.push(message);
-        newMessage.value = '';
-        scrollToBottom();
-    } catch (error) {
-        console.error('Erreur d\'envoi:', error);
-        toast.error('Erreur d\'envoi du message');
-    }
-};
 const scrollToBottom = () => {
     if (messagesContainer.value) {
-        setTimeout(() => {
-            messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-        }, 50);
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     }
-};
+}
 
-const handleMessageReceived = (event) => {
-    const messageList = event.data;
-    messages.value.push(...messageList);
-    if (!isExpanded.value) {
-        unreadCount.value += messageList.length;
-    }
-    scrollToBottom();
-};
+// Exposer la méthode receiveMessage pour le composant parent
+defineExpose({
+    receiveMessage
+})
 
-
-const loginTIM = async () => {
-    try {
-        if (!props.currentUserId || !props.groupId) {
-            throw new Error('Props manquantes pour l\'initialisation');
-        }
-
-        console.log('Initialisation TIM avec:', {
-            userId: props.currentUserId,
-            groupId: props.groupId,
-            types: {
-                userId: typeof props.currentUserId,
-                groupId: typeof props.groupId
-            }
-        });
-
-        const { userSig } = GenerateTestUserSig.genTestUserSig({
-            userID: String(props.currentUserId),
-            SDKAppID: Number(SDKAppID),
-            SecretKey: SDKSecretKey
-        });
-
-        await tim.login({
-            userID: String(props.currentUserId),
-            userSig: userSig
-        });
-
-        try {
-            await tim.joinGroup({
-                groupID: String(props.groupId),
-                type: TIM.TYPES.GRP_AVCHATROOM
-            });
-        } catch (error) {
-            if (error.code !== 10013) {
-                throw error;
-            }
-        }
-
-        isInitialized.value = true;
-    } catch (error) {
-        console.error('Erreur d\'initialisation du chat:', error);
-        toast.error(`Erreur d'initialisation: ${error.message}`);
-        throw error;
-    }
-};
-
-
-watch(messages, (newMessages, oldMessages) => {
-    if (!isExpanded.value && oldMessages && newMessages.length > oldMessages.length) {
-        unreadCount.value++;
-    }
-});
-
-onMounted(async () => {
-    console.log('Montage du composant avec props:', {
-        currentUserId: props.currentUserId,
-        groupId: props.groupId,
-        isCallActive: props.isCallActive
-    });
-
-    try {
-        await loginTIM();
-        tim.on(TIM.EVENT.MESSAGE_RECEIVED, handleMessageReceived);
-    } catch (error) {
-        console.error('Erreur lors du montage:', error);
-    }
-});
-
-onUnmounted(() => {
-    if (tim) {
-        tim.off(TIM.EVENT.MESSAGE_RECEIVED);
-        tim.logout();
-    }
-});
 </script>
-
 <style scoped>
 .chat-container {
-    position: fixed;
-    right: 20px;
-    bottom: 20px;
-    z-index: 1000;
-}
-
-.chat-toggle-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 25px;
-    background: #4F46E5;
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 1.5rem;
-    position: relative;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-
-.unread-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #EF4444;
-    color: white;
-    border-radius: 10px;
-    padding: 2px 6px;
-    font-size: 0.75rem;
-}
-
-.chat-panel {
-    position: absolute;
-    bottom: 60px;
-    right: 0;
-    width: 300px;
-    height: 400px;
-    background: white;
+    max-width: 800px;
+    margin: 0 auto;
     border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    height: 600px;
+}
+
+.messages-area {
+    height: 400px;
+    overflow-y: auto;
+    padding: 20px;
+    background-color: #f9fafc;
+    border-radius: 8px;
+    margin: 15px 0;
     display: flex;
     flex-direction: column;
 }
 
-.chat-header {
-    padding: 12px;
-    border-bottom: 1px solid #e5e7eb;
+.my-message {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    justify-content: flex-end;
+    width: 100%;
 }
 
-.messages-container {
+.other-message {
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.my-message .uk-card {
+    background-color: #1e87f0;
+    color: white;
+    display: inline-block;
+    max-width: 70%;
+    border-radius: 12px 12px 2px 12px;
+    margin-left: auto;
+    box-shadow: 0 2px 4px rgba(30, 135, 240, 0.2);
+}
+
+.other-message .uk-card {
+    background-color: #ffffff;
+    display: inline-block;
+    max-width: 70%;
+    border-radius: 12px 12px 12px 2px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.uk-alert {
+    margin-bottom: 15px;
+    text-align: center;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.uk-input {
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    padding: 12px;
+}
+
+.uk-button-primary {
+    border-radius: 8px;
+    padding: 0 20px;
+    margin-left: 8px;
+    transition: all 0.2s ease;
+}
+
+.uk-button-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(30, 135, 240, 0.3);
+}
+
+/* Style pour la barre de défilement */
+.messages-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages-area::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.messages-area::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.messages-area::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+.uk-margin {
+    margin-top: auto;
+    padding: 15px;
+}
+
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.messages-area {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    /* Permet de faire défiler les messages si nécessaire */
+    margin-bottom: 16px;
+    /* Espace entre les messages et l'input */
 }
 
-.message {
-    max-width: 80%;
-    padding: 8px 12px;
-    border-radius: 12px;
-    background: #f3f4f6;
-    align-self: flex-start;
+.my-message {
+    margin-top: 8px;
+    /* Espace entre les messages envoyés */
+    text-align: right;
+    /* Alignement à droite pour mes messages */
 }
 
-.message-own {
-    background: #4F46E5;
-    color: white;
-    align-self: flex-end;
+.other-message {
+    margin-top: 8px;
+    /* Espace entre les messages reçus */
+    text-align: left;
+    /* Alignement à gauche pour les autres messages */
 }
 
-.message-header {
-    font-size: 0.75rem;
-    margin-bottom: 4px;
-    display: flex;
-    justify-content: space-between;
+.uk-card {
+    display: inline-block;
+    /* Permet de mieux contrôler l'alignement des cartes */
 }
 
-.message-time {
-    opacity: 0.7;
-}
-
-.chat-input-container {
-    padding: 12px;
-    border-top: 1px solid #e5e7eb;
-    display: flex;
-    gap: 8px;
-}
-
-.chat-input-container input {
-    flex: 1;
-    padding: 8px;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    outline: none;
-}
-
-.chat-input-container button {
-    padding: 8px 16px;
-    background: #4F46E5;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.chat-input-container button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+.uk-inline {
+    margin-top: auto;
+    /* Pousse le champ de saisie en bas du container */
 }
 </style>

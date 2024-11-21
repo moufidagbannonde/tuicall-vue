@@ -9,8 +9,10 @@ import TRTC from 'trtc-js-sdk';
 
 // variables globales
 const isCallActive = ref(false);
-const SDKAppID = 1400787156;
-const SDKSecretKey = "3d1d8898c74bdcc7cd7357d97d7df3ea38c5cc559087e889e46c1ffd2d67c2a9";
+// const SDKAppID = 0;
+// const SDKSecretKey = "";
+const SDKAppID = 20014601;
+const SDKSecretKey = "76511b9b4c801d3ae63d3cdee238b8f201d148a73e464267e2c6e54b597422f8";
 const isCalleeInitialized = ref(false);
 const isCallStarted = ref(false);
 const calleeUserIDs = ref('');
@@ -294,7 +296,6 @@ const init = async (callerUserID) => {
 const handleInit = async (userID) => {
     try {
         await init(userID);
-        // autres actions après l'initialisation si nécessaire
     } catch (error) {
         console.error("Erreur lors de l'initialisation:", error);
         toast.error("Erreur lors de l'initialisation");

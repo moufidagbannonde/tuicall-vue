@@ -1,5 +1,4 @@
 <template>
-
   <div class="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 p-8">
     <div class="container mx-auto flex flex-col items-center">
       <!-- En-tête de page -->
@@ -55,44 +54,73 @@
         message="Aucune caméra n'a été détectée. Voulez-vous passer en appel audio ?" confirm-text="Passer en audio"
         cancel-text="Annuler" @confirm="handleNoCameraConfirm" @cancel="handleNoCameraCancel" />
 
-      <!-- Interface d'appel -->
-      <div class="TUICallKit w-full flex flex-col items-center mt-8 space-y-6" v-if="isCalleeInitialized">
-        <TUICallKit class="w-full bg-white bg-opacity-95 rounded-2xl shadow-2xl 
-            transition-all duration-500 ease-in-out transform hover:scale-[1.02]
-            h-80 md:h-[28rem] lg:h-[35rem] xl:h-[48rem] 
-            max-w-sm md:max-w-4xl lg:max-w-5xl xl:max-w-6xl
-            backdrop-blur-lg border border-white border-opacity-20" id="screen-share" />
+      <!-- Interface d'appel et chat -->
+      <div class="w-full flex flex-col lg:flex-row gap-8 mt-8 relative" v-if="isCalleeInitialized">
+        <!-- Interface d'appel -->
+        <div class="flex-1">
+          <TUICallKit class="w-full bg-white bg-opacity-95 rounded-2xl shadow-2xl 
+              transition-all duration-500 ease-in-out transform hover:scale-[1.02]
+              h-80 md:h-[28rem] lg:h-[35rem] xl:h-[48rem] 
+              backdrop-blur-lg border border-white border-opacity-20" id="screen-share" />
 
-        <!-- Contrôles de partage d'écran -->
-        <div class="screen-share-controls flex space-x-4 mt-8" v-if="isCalleeInitialized">
-          <!-- Bouton de partage d'écran -->
-          <button @click="startScreenShare" class="px-8 py-4 rounded-xl font-bold text-white
-                  bg-gradient-to-r from-blue-500 to-indigo-600
-                  hover:from-blue-600 hover:to-indigo-700
-                  transform hover:-translate-y-1 transition-all duration-300
-                  shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
-                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-            :disabled="isScreenSharing || currentScreenSharer === currentUserID">
-            Partager l'écran
-          </button>
-          <!-- bouton d'arrêt de partage d'écran -->
-          <button @click="stopScreenCapture" :disabled="!isScreenSharing || currentScreenSharer !== currentUserID"
-            class="px-8 py-4 rounded-xl font-bold text-white
-              bg-gradient-to-r from-red-500 to-red-600
-              hover:from-red-600 hover:to-red-700
-              transform hover:-translate-y-1 transition-all duration-300
-              shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
-              focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
-            Arrêter le partage
-          </button>
+          <!-- Contrôles des boutons de partage d'écran -->
+          <div class="screen-share-controls flex space-x-4 mt-4">
+            <!-- Bouton de partage d'écran -->
+            <button @click="startScreenShare" class="px-8 py-4 rounded-xl font-bold text-white
+                    bg-gradient-to-r from-blue-500 to-indigo-600
+                    hover:from-blue-600 hover:to-indigo-700
+                    transform hover:-translate-y-1 transition-all duration-300
+                    shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+              :disabled="isScreenSharing || currentScreenSharer !== null">
+              Partager l'écran
+            </button>
+            <!-- bouton d'arrêt de partage d'écran -->
+            <button @click="stopScreenCapture" :disabled="!isScreenSharing || currentScreenSharer !== currentUserID"
+              class="px-8 py-4 rounded-xl font-bold text-white
+                bg-gradient-to-r from-red-500 to-red-600
+                hover:from-red-600 hover:to-red-700
+                transform hover:-translate-y-1 transition-all duration-300
+                shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
+                focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
+              Arrêter le partage
+            </button>
+          </div>
+        </div>
+
+        <!-- Bouton Chat -->
+        <button @click="toggleChat" class="fixed right-0 top-1/2 transform -translate-y-1/2 z-50
+                 bg-gradient-to-r from-blue-600 to-indigo-600 
+                 text-white p-3 rounded-l-lg shadow-lg
+                 hover:from-blue-700 hover:to-indigo-700
+                 transition-all duration-300" :class="{ 'right-96': isChatOpen }">
+          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
+            v-if="!isChatOpen">
+            <path
+              d="M240-400h320v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+          </svg>
+          <span v-else class="flex items-center">
+            <i class="fas fa-times text-xl"></i>
+          </span>
+        </button>
+
+        <!-- affichage du composant de discussion -->
+        <div v-if="isCallActive"
+          class="fixed right-0 top-0 h-full w-96 transition-transform duration-300 ease-in-out transform z-40"
+          :class="isChatOpen ? 'translate-x-0' : 'translate-x-full'">
+          <ChatComponent ref="chatComponentRef" :callActive="isCallActive" @message-sent="handleChatMessage" class="bg-white bg-opacity-95 rounded-l-2xl shadow-2xl h-full
+                  transition-all duration-500 ease-in-out
+                  backdrop-blur-lg border border-white border-opacity-20" />
         </div>
       </div>
-    </div>
-    <div class="flex justify-center w-full">
-      <div ref="remoteContainer" id="remoteContainer" class="w-full max-w-4xl mt-8 p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 
-      bg-opacity-90 backdrop-blur-lg  shadow-2xl 
-       border-gray-100 transition-all duration-300
-      hover:shadow-3xl transform hover:scale-[1.01]">
+
+      <!-- conteneur affichant les flux distants -->
+      <div class="flex justify-center w-full">
+        <div ref="remoteContainer" id="remoteContainer" class="w-full max-w-4xl mt-8 p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 
+        bg-opacity-90 backdrop-blur-lg  shadow-2xl 
+         border-gray-100 transition-all duration-300
+        hover:shadow-3xl transform hover:scale-[1.01]">
+        </div>
       </div>
     </div>
   </div>
@@ -110,11 +138,12 @@ import Chat from "@tencentcloud/chat";
 import { useToast } from 'vue-toastification';
 import TRTC from 'trtc-js-sdk';
 import ConfirmModal from './components/ConfirmModal.vue';
+import ChatComponent from './components/ChatComponent.vue';
 
 // variables d'accès à l'API Tencent Cloud
-const SDKAppID = 20014601;
-const SDKSecretKey = "76511b9b4c801d3ae63d3cdee238b8f201d148a73e464267e2c6e54b597422f8";
 
+const SDKAppID = 20014657;
+const SDKSecretKey = "12fba7aae1b6b78f680f2fd13fd8a12bd9015b97f2b35ef194bb2996dcf1bbc8";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 
@@ -140,6 +169,13 @@ const isTRTCInitialized = ref(false);
 const screenStream = ref(null);
 let client = ref(null);
 
+// Ajouter les références pour le chat
+const chatComponentRef = ref(null);
+const chatMessages = ref([]);
+
+// Ajoutez dans les refs
+const isChatOpen = ref(false);
+
 /**
  *  cycles de vie
  */
@@ -147,6 +183,9 @@ let client = ref(null);
 onMounted(() => {
   initTRTC(); // initialisation de TRTC
 });
+onMounted(() => {
+  console.log("window's history", window.History)
+})
 
 
 // démontage du composant
@@ -263,7 +302,11 @@ async function startScreenShare() {
     toast.success("Partage d'écran démarré avec succès!");
   } catch (error) {
     console.error("Erreur lors du partage d'écran : ", error);
-    toast.error(`Erreur lors du partage d'écran : ${error.message}`);
+    if (error.message && error.message.includes("Permission denied")) {
+      toast.warning("Permission refusée pour le partage d'écran");
+    } else {
+      toast.error(`Erreur lors du partage d'écran`);
+    }
     screenStream.value = null;
   }
 }
@@ -423,8 +466,6 @@ const init = async (callerUserID) => {
 const handleInit = async (userID) => {
   try {
     await init(userID);
-    currentUserID.value = userID;
-    // autres actions après l'initialisation si nécessaire
   } catch (error) {
     console.error("Erreur lors de l'initialisation:", error);
     toast.error("Erreur lors de l'initialisation");
@@ -518,6 +559,12 @@ const handleUserEnter = (userID) => {
   console.log('Utilisateur entré:', userID);
   isCallStarted.value = true;
   isCallActive.value = true;
+
+  // Ajouter un message système dans le chat
+  if (chatComponentRef.value) {
+    chatComponentRef.value.receiveMessage(`${userID} a rejoint l'appel`);
+  }
+
   toast.success(`${userID} a rejoint l'appel`);
 };
 
@@ -532,6 +579,11 @@ const handleCallEnd = () => {
   console.log('Appel terminé');
   isCallStarted.value = false;
   isCallActive.value = false;
+
+  // Ajouter un message système dans le chat
+  if (chatComponentRef.value) {
+    chatComponentRef.value.receiveMessage('L\'appel est terminé');
+  }
 
   if (!isCallActive.value) {
     isCallStarted.value = false;
@@ -549,6 +601,8 @@ const cleanup = () => {
   if (screenStream.value) {
     stopScreenCapture();
   }
+  // Réinitialiser les messages du chat
+  chatMessages.value = [];
 };
 
 // permet de gérer les erreurs
@@ -561,6 +615,7 @@ const handleError = (error) => {
 const createGroupID = async () => {
   const chat = Chat.create({ SDKAppID });
   const userIDList = calleeUserIDs.value.split(',').map(id => id.trim()).filter(id => id);
+  console.log("userIDList>>>>>", userIDList);
   const memberList = userIDList.map(userID => ({ userID }));
   const res = await chat.createGroup({ type: Chat.TYPES.GRP_PUBLIC, name: "WebSDK", memberList });
   groupID.value = res.data.group.groupID;
@@ -604,8 +659,41 @@ const cancelGroupCall = () => {
   showGroupCallForm.value = false;
   calleeUserIDs.value = '';
 };
+
+/**
+ * Gestion des messages du chat
+ * @param message le message envoyé
+ */
+const handleChatMessage = async (message) => {
+  try {
+    // Pour l'instant, on simule juste une réponse
+    console.log('Message envoyé:', message);
+    // Simulation d'une réception de message 
+    setTimeout(() => {
+      if (chatComponentRef.value) {
+        chatComponentRef.value.receiveMessage(`Réponse au message: ${message}`); // affichage du message reçu chaque seconde après l'envoi du message 
+      }
+    }, 1000);
+
+    toast.success('Message envoyé avec succès');
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi du message:', error);
+    toast.error('Erreur lors de l\'envoi du message');
+  }
+};
+
+// permet d'ouvrir et de fermer la fenêtre de discussion
+const toggleChat = () => {
+  isChatOpen.value = !isChatOpen.value;
+};
 </script>
+
+
 
 <style scoped>
 @import './assets/app.css';
+
+.chat-container {
+  transition: all 0.3s ease;
+}
 </style>
