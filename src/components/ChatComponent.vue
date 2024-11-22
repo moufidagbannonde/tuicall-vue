@@ -9,10 +9,10 @@
             <!-- Zone des messages -->
             <div class="messages-area uk-margin" ref="messagesContainer">
                 <div v-for="(message, index) in messages" :key="index"
-                    :class="['uk-margin-small', message.isMe ? 'my-message' : 'other-message']">
-                    <div class="uk-card uk-card-primary uk-card-small uk-card-body">
+                    :class="['message', message.isMe ? 'my-message' : 'other-message']">
+                    <div class="message-bubble">
                         <p class="uk-margin-remove">{{ message.text }}</p>
-                        <small class="uk-text-muted">{{ message.time }}</small>
+                        <p class="uk-text-muted">{{ message.time }}</p>
                     </div>
                 </div>
             </div>
@@ -31,34 +31,48 @@
     </div>
 </template>
 <script setup lang="ts">
-// import des fonctions de vue
-import { ref, nextTick, onMounted } from 'vue'
 
-// interface pour les messages
+// import des fonctions de vue
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useToast } from 'vue-toastification';
+import { io } from 'socket.io-client';
+
+const toast = useToast();
+
+// Interface pour les messages
 interface Message {
-    text: string
-    time: string
-    isMe: boolean
+    text: string;
+    time: string;
+    isMe: boolean;
 }
 
-//  props pour recevoir les messages externes
+// Props pour recevoir les messages externes
 const props = defineProps<{
-    callActive: boolean
-}>()
+    callActive: boolean;
+}>();
 
-// Ajout des émetteurs d'événements
+// Émettre des événements
 const emit = defineEmits<{
-    (e: 'message-sent', message: string): void
-}>()
+    (e: 'message-sent', message: string): void;
+}>();
 
-const messages = ref<Message[]>([])
-const newMessage = ref('')
-const messagesContainer = ref<HTMLElement | null>(null)
+const messages = ref<Message[]>([]);
+const newMessage = ref('');
+const messagesContainer = ref<HTMLElement | null>(null);
+const socket = ref<any>(null); // Référence pour le socket
+
+const connectSocket = () => {
+    socket.value = io('http://localhost:8080'); // Remplacez par votre URL de serveur
+
+    socket.value.on('message', (message: string) => {
+        receiveMessage(message);
+    });
+};
 
 const sendMessage = () => {
     if (!props.callActive) {
-        alert('Impossible d\'envoyer un message : appel non actif')
-        return
+        toast.error('Impossible d\'envoyer un message : appel non actif');
+        return;
     }
     if (newMessage.value.trim()) {
         // Création du message local
@@ -66,178 +80,175 @@ const sendMessage = () => {
             text: newMessage.value,
             time: new Date().toLocaleTimeString(),
             isMe: true
-        })
+        });
+
+        // Émission du message vers le serveur
+        socket.value.emit('message', newMessage.value);
 
         // Émission du message vers le composant parent
-        emit('message-sent', newMessage.value)
+        emit('message-sent', newMessage.value);
 
-        newMessage.value = ''
+        newMessage.value = '';
         nextTick(() => {
-            scrollToBottom()
-        })
+            scrollToBottom();
+        });
     }
-}
+};
 
-// Ajout d'une méthode pour recevoir les messages externes
+
+
+// Réception des messages externes
 const receiveMessage = (text: string) => {
     messages.value.push({
         text,
         time: new Date().toLocaleTimeString(),
         isMe: false
-    })
+    });
     nextTick(() => {
-        scrollToBottom()
-    })
-}
+        scrollToBottom();
+    });
+};
 
 const scrollToBottom = () => {
     if (messagesContainer.value) {
-        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
     }
-}
+};
+
+// Connexion au socket lors du montage du composant
+onMounted(() => {
+    connectSocket();
+});
+
+// Déconnexion du socket lors de la destruction du composant
+onBeforeUnmount(() => {
+    if (socket.value) {
+        socket.value.disconnect();
+    }
+});
 
 // Exposer la méthode receiveMessage pour le composant parent
 defineExpose({
     receiveMessage
-})
+});
 
 </script>
 <style scoped>
 .chat-container {
     max-width: 800px;
     margin: 0 auto;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    background: #f8f9fe;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    height: 80vh;
     display: flex;
     flex-direction: column;
-    height: 600px;
 }
 
 .messages-area {
-    height: 400px;
+    flex: 1;
     overflow-y: auto;
     padding: 20px;
-    background-color: #f9fafc;
-    border-radius: 8px;
-    margin: 15px 0;
-    display: flex;
-    flex-direction: column;
+    margin: 20px 0;
+    background: white;
+    border-radius: 15px;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
 }
 
-.my-message {
-    display: flex;
-    justify-content: flex-end;
-    width: 100%;
+.message-bubble {
+    max-width: 70%;
+    padding: 12px 20px;
+    border-radius: 20px;
+    margin: 8px 0;
 }
 
-.other-message {
-    display: flex;
-    justify-content: flex-start;
-    width: 100%;
-}
-
-.my-message .uk-card {
-    background-color: #1e87f0;
+.my-message .message-bubble {
+    background: #2979ff;
     color: white;
-    display: inline-block;
-    max-width: 70%;
-    border-radius: 12px 12px 2px 12px;
     margin-left: auto;
-    box-shadow: 0 2px 4px rgba(30, 135, 240, 0.2);
+    border-bottom-right-radius: 5px;
 }
 
-.other-message .uk-card {
-    background-color: #ffffff;
-    display: inline-block;
-    max-width: 70%;
-    border-radius: 12px 12px 12px 2px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.uk-alert {
-    margin-bottom: 15px;
-    text-align: center;
-    border-radius: 8px;
-    font-weight: 500;
+.other-message .message-bubble {
+    background: #e9ecef;
+    color: #333;
+    margin-right: auto;
+    border-bottom-left-radius: 5px;
 }
 
 .uk-input {
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    padding: 12px;
+    border-radius: 25px;
+    padding: 15px 25px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.uk-input:focus {
+    border-color: #2979ff;
+    box-shadow: 0 0 0 3px rgba(41, 121, 255, 0.1);
 }
 
 .uk-button-primary {
-    border-radius: 8px;
-    padding: 0 20px;
-    margin-left: 8px;
-    transition: all 0.2s ease;
+    border-radius: 25px;
+    padding: 10px 30px;
+    background: #2979ff;
+    border: none;
+    margin-left: 10px;
+    transition: all 0.3s ease;
 }
 
 .uk-button-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(30, 135, 240, 0.3);
+    background: #1565c0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(41, 121, 255, 0.2);
 }
 
-/* Style pour la barre de défilement */
+.uk-alert {
+    border-radius: 12px;
+    padding: 12px 20px;
+    text-align: center;
+    font-weight: 500;
+    margin-bottom: 20px;
+}
+
+.uk-alert-success {
+    background: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #90caf9;
+}
+
+.uk-alert-warning {
+    background: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffe0b2;
+}
+
+.uk-text-muted {
+    font-size: 0.8em;
+    margin-top: 4px;
+    opacity: 0.7;
+}
+
+/* Personnalisation de la scrollbar */
 .messages-area::-webkit-scrollbar {
     width: 6px;
 }
 
 .messages-area::-webkit-scrollbar-track {
     background: #f1f1f1;
-    border-radius: 3px;
+    border-radius: 10px;
 }
 
 .messages-area::-webkit-scrollbar-thumb {
     background: #c1c1c1;
-    border-radius: 3px;
+    border-radius: 10px;
 }
 
 .messages-area::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
-
-.uk-margin {
-    margin-top: auto;
-    padding: 15px;
-}
-
-.chat-container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
-.messages-area {
-    flex: 1;
-    overflow-y: auto;
-    /* Permet de faire défiler les messages si nécessaire */
-    margin-bottom: 16px;
-    /* Espace entre les messages et l'input */
-}
-
-.my-message {
-    margin-top: 8px;
-    /* Espace entre les messages envoyés */
-    text-align: right;
-    /* Alignement à droite pour mes messages */
-}
-
-.other-message {
-    margin-top: 8px;
-    /* Espace entre les messages reçus */
-    text-align: left;
-    /* Alignement à gauche pour les autres messages */
-}
-
-.uk-card {
-    display: inline-block;
-    /* Permet de mieux contrôler l'alignement des cartes */
-}
-
-.uk-inline {
-    margin-top: auto;
-    /* Pousse le champ de saisie en bas du container */
-}
 </style>
+
+
+

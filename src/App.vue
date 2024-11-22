@@ -33,7 +33,7 @@
                 bg-white bg-opacity-90 backdrop-blur-sm" />
 
             <div class="flex flex-col space-y-3 mt-6">
-              <button @click="handleStartGroupCall" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl
+              <button  @click="handleStartGroupCall" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl
                   hover:from-green-600 hover:to-emerald-700 transform hover:-translate-y-1 
                   transition-all duration-300 shadow-lg hover:shadow-xl">
                 Start Group Call
@@ -85,30 +85,32 @@
                 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
               Arrêter le partage
             </button>
-          </div>
-        </div>
-
-        <!-- Bouton Chat -->
-        <button @click="toggleChat" class="fixed right-0 top-1/2 transform -translate-y-1/2 z-50
+            <!-- Bouton Chat -->
+            <button  @click="toggleChat" class="fixed right-0 top-1/2 transform -translate-y-1/2 z-50
                  bg-gradient-to-r from-blue-600 to-indigo-600 
                  text-white p-3 rounded-l-lg shadow-lg
                  hover:from-blue-700 hover:to-indigo-700
                  transition-all duration-300" :class="{ 'right-96': isChatOpen }">
-          <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-            v-if="!isChatOpen">
-            <path
-              d="M240-400h320v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-          </svg>
-          <span v-else class="flex items-center">
-            <i class="fas fa-times text-xl"></i>
-          </span>
-        </button>
+              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
+                v-if="!isChatOpen">
+                <path
+                  d="M240-400h320v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+              </svg>
+              <span v-else class="flex items-center">
+                ❌
+              </span>
+            </button>
+          </div>
+        </div>
+
+
 
         <!-- affichage du composant de discussion -->
-        <div v-if="isCallActive"
+        <div v-if="isCalleeInitialized"
           class="fixed right-0 top-0 h-full w-96 transition-transform duration-300 ease-in-out transform z-40"
           :class="isChatOpen ? 'translate-x-0' : 'translate-x-full'">
-          <ChatComponent ref="chatComponentRef" :callActive="isCallActive" @message-sent="handleChatMessage" class="bg-white bg-opacity-95 rounded-l-2xl shadow-2xl h-full
+          <ChatComponent ref="chatComponentRef" :callActive="isCalleeInitialized" @message-sent="handleChatMessage(socket)"
+             class="bg-white bg-opacity-95 rounded-l-2xl shadow-2xl h-full
                   transition-all duration-500 ease-in-out
                   backdrop-blur-lg border border-white border-opacity-20" />
         </div>
@@ -139,11 +141,13 @@ import { useToast } from 'vue-toastification';
 import TRTC from 'trtc-js-sdk';
 import ConfirmModal from './components/ConfirmModal.vue';
 import ChatComponent from './components/ChatComponent.vue';
+import TIM from 'tim-js-sdk';
+import TIMUploadPlugin from 'tim-upload-plugin';
+
 
 // variables d'accès à l'API Tencent Cloud
-
-const SDKAppID = 20014657;
-const SDKSecretKey = "12fba7aae1b6b78f680f2fd13fd8a12bd9015b97f2b35ef194bb2996dcf1bbc8";
+const SDKAppID = 40000517;
+const SDKSecretKey = "4ce6abda7d37c93333663dc0d9fde8f157c8962a08e05e77908174272f32d343";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 
@@ -196,77 +200,84 @@ onUnmounted(() => {
 
 // initialisation TRTC
 async function initTRTC(callerUserID) {
-  const userID = String(callerUserID);
-
-  // Génération du userSig(signature d'utilisateur) 
-  const { userSig } = GenerateTestUserSig.genTestUserSig({
-    userID: userID,
-    SDKAppID,
-    SecretKey: SDKSecretKey
-  });
-
-  // création du client TRTC
-  client.value = TRTC.createClient({
-    mode: 'rtc',
-    sdkAppId: SDKAppID,
-    userId: userID,
-    userSig: userSig
-  });
-
-  // Configuration des événements
-  client.value.on('stream-added', async (event) => {
-    const remoteStream = event.stream;
-    console.log('Nouveau flux distant détecté:', remoteStream.getId());
-    await client.value.subscribe(remoteStream);
-  });
-
-  // événement pour la gestion correcte de l'affichage
-  client.value.on('stream-subscribed', (event) => {
-    const remoteStream = event.stream;
-    const streamId = remoteStream.getId();
-    const userId = remoteStream.getUserId();
-    const streamType = remoteStream.getType();
-
-    console.log('Stream souscrit:', {
-      streamId,
-      userId,
-      streamType,
-      clientId: client.value.userId
+  try {
+    const userID = String(callerUserID);
+    const { userSig } = GenerateTestUserSig.genTestUserSig({
+      userID: userID,
+      SDKAppID,
+      SecretKey: SDKSecretKey
     });
 
-    // Non affichage du propre flux de partage d'écran (flux local)
-    if (userId === client.value.userId) {
-      console.log('Ignorer l\'affichage du flux local');
-      return;
-    }
+    client.value = TRTC.createClient({
+      mode: 'rtc',
+      sdkAppId: SDKAppID,
+      userId: userID,
+      userSig: userSig
+    });
 
-    // Création  de la div pour le flux distant
-    let remoteDiv = document.getElementById(`remote-${streamId}`);
-    if (!remoteDiv) {
-      remoteDiv = document.createElement('div');
-      remoteDiv.id = `remote-${streamId}`;
-      remoteDiv.className = 'w-full h-full rounded-lg overflow-hidden';
-      document.querySelector('#remoteContainer').appendChild(remoteDiv);
-    }
+    // Configuration des événements
+    client.value.on('stream-added', async (event) => {
+      const remoteStream = event.stream;
+      console.log('Nouveau flux distant détecté:', remoteStream.getId());
+      await client.value.subscribe(remoteStream);
+    });
 
-    // Jouer le flux distant
-    remoteStream.play(remoteDiv.id);
-  });
-  client.value.on('stream-removed', (event) => {
-    const remoteStream = event.stream;
-    const streamId = remoteStream.getId();
-    console.log('Stream supprimé:', streamId);
-    cleanupRemoteStream(streamId);
-  });
+    // événement pour la gestion correcte de l'affichage
+    client.value.on('stream-subscribed', (event) => {
+      const remoteStream = event.stream;
+      const streamId = remoteStream.getId();
+      const userId = remoteStream.getUserId();
+      const streamType = remoteStream.getType();
 
-  try {
-    // connexion à la salle
+      console.log('Stream souscrit:', {
+        streamId,
+        userId,
+        streamType,
+        clientId: client.value.userId
+      });
+
+      // Non affichage du propre flux de partage d'écran (flux local)
+      if (userId === client.value.userId) {
+        console.log('Ignorer l\'affichage du flux local');
+        return;
+      }
+
+      // Création  de la div pour le flux distant
+      let remoteDiv = document.getElementById(`remote-${streamId}`);
+      if (!remoteDiv) {
+        remoteDiv = document.createElement('div');
+        remoteDiv.id = `remote-${streamId}`;
+        remoteDiv.className = 'w-full h-full rounded-lg overflow-hidden';
+        document.querySelector('#remoteContainer').appendChild(remoteDiv);
+      }
+
+      // Jouer le flux distant
+      remoteStream.play(remoteDiv.id);
+    });
+    client.value.on('stream-removed', (event) => {
+      const remoteStream = event.stream;
+      const streamId = remoteStream.getId();
+      console.log('Stream supprimé:', streamId);
+      cleanupRemoteStream(streamId);
+    });
+
     await client.value.join({ roomId: roomID.value });
     isTRTCInitialized.value = true;
     toast.success("Connecté à la salle avec succès !");
   } catch (error) {
     console.error("Erreur lors de la connexion à la salle : ", error);
-    toast.error("Erreur lors de la connexion à la salle");
+    
+    // Gestion spécifique des erreurs TRTC
+    if (error.code === -100013) {
+      toast.error("Le service TRTC est suspendu. Veuillez vérifier votre solde Tencent Cloud.");
+    } else {
+      toast.error(`Erreur de connexion : ${error.message}`);
+    }
+    
+    // Réinitialisation des états en cas d'erreur
+    client.value = null;
+    isTRTCInitialized.value = false;
+    throw error; // Propager l'erreur pour la gestion en amont
   }
 }
 
@@ -352,6 +363,7 @@ async function leaveRoom() {
     isTRTCInitialized.value = false;
   }
 }
+
 
 /**
  * permet d'arrêter le partage d'écran
@@ -659,26 +671,41 @@ const cancelGroupCall = () => {
   showGroupCallForm.value = false;
   calleeUserIDs.value = '';
 };
+import { io } from 'socket.io-client';
+const socket = ref(io('http://localhost:8080', {
+  withCredentials: true,
+  transports: ['websocket', 'polling']
+}));
 
+onMounted(() => {
+  socket.value.on('connect', () => {
+    console.log('Connecté au serveur Socket.IO');
+  });
+
+  socket.value.on('error', (error) => {
+    console.error('Erreur Socket.IO:', error);
+    toast.error('Erreur de connexion au chat');
+  });
+});
+
+onUnmounted(() => {
+  if (socket.value) {
+    socket.value.disconnect();
+  }
+});
 /**
  * Gestion des messages du chat
  * @param message le message envoyé
  */
 const handleChatMessage = async (message) => {
   try {
-    // Pour l'instant, on simule juste une réponse
+    // Émettre le message directement sans passer par le composant chat
+    socket.value.emit('message', message);
     console.log('Message envoyé:', message);
-    // Simulation d'une réception de message 
-    setTimeout(() => {
-      if (chatComponentRef.value) {
-        chatComponentRef.value.receiveMessage(`Réponse au message: ${message}`); // affichage du message reçu chaque seconde après l'envoi du message 
-      }
-    }, 1000);
-
     toast.success('Message envoyé avec succès');
   } catch (error) {
     console.error('Erreur lors de l\'envoi du message:', error);
-    toast.error('Erreur lors de l\'envoi du message');
+   // toast.error('Erreur lors de l\'envoi du message');
   }
 };
 
