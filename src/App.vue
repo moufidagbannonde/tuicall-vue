@@ -33,12 +33,14 @@
                 bg-white bg-opacity-90 backdrop-blur-sm" />
 
             <div class="flex flex-col space-y-3 mt-6">
+              <!-- bouton de démarrage de l'appel de groupe -->
               <button  @click="handleStartGroupCall" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl
                   hover:from-green-600 hover:to-emerald-700 transform hover:-translate-y-1 
                   transition-all duration-300 shadow-lg hover:shadow-xl">
                 Start Group Call
               </button>
 
+              <!--bouton d'annulation de l'appel de groupe-->
               <button @click="cancelGroupCall" class="bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold py-4 rounded-xl
                   hover:from-gray-600 hover:to-gray-700 transform hover:-translate-y-1 
                   transition-all duration-300 shadow-lg hover:shadow-xl">
@@ -105,14 +107,12 @@
 
 
 
-        <!-- affichage du composant de discussion -->
+        <!-- interface de chat -->
         <div v-if="isCalleeInitialized"
-          class="fixed right-0 top-0 h-full w-96 transition-transform duration-300 ease-in-out transform z-40"
+          class="fixed right-0 top-0 h-full w-[400px] transition-transform duration-300 ease-in-out transform z-40"
           :class="isChatOpen ? 'translate-x-0' : 'translate-x-full'">
           <ChatComponent ref="chatComponentRef" :callActive="isCalleeInitialized" @message-sent="handleChatMessage(socket)"
-             class="bg-white bg-opacity-95 rounded-l-2xl shadow-2xl h-full
-                  transition-all duration-500 ease-in-out
-                  backdrop-blur-lg border border-white border-opacity-20" />
+              />
         </div>
       </div>
 
@@ -131,23 +131,28 @@
 
 
 <script setup>
+// fonctionnalités de vue
 import { onMounted, onUnmounted, ref, watch } from 'vue';
+// générateur de clés
+import * as GenerateTestUserSig from './debug/GenerateTestUserSig-es';
+// notification(s)
+import { useToast } from 'vue-toastification';
+// TUI
 import { TUICallKit, TUICallKitServer, TUICallType } from '@tencentcloud/call-uikit-vue';
+import Chat from "@tencentcloud/chat";
+import TRTC from 'trtc-js-sdk';
+// composants
 import CallInit from './components/CallInit.vue';
 import CallControls from './components/CallControls.vue';
-import * as GenerateTestUserSig from './debug/GenerateTestUserSig-es';
-import Chat from "@tencentcloud/chat";
-import { useToast } from 'vue-toastification';
-import TRTC from 'trtc-js-sdk';
 import ConfirmModal from './components/ConfirmModal.vue';
 import ChatComponent from './components/ChatComponent.vue';
-import TIM from 'tim-js-sdk';
-import TIMUploadPlugin from 'tim-upload-plugin';
+// socket
+import { io } from 'socket.io-client';
 
 
 // variables d'accès à l'API Tencent Cloud
-const SDKAppID = 40000517;
-const SDKSecretKey = "4ce6abda7d37c93333663dc0d9fde8f157c8962a08e05e77908174272f32d343";
+const SDKAppID = 20014772;
+const SDKSecretKey = "c1c2a4c234a8ec619d9d64d49f629f9ac900415dd69aeb21312a146e4f474790";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 
@@ -167,6 +172,7 @@ const currentUserID = ref(null);
 const showNoCameraModal = ref(false);
 let pendingCalleeUserID = ref(null);
 let pendingCallType = ref(null);
+
 
 // variables partage écran
 const isTRTCInitialized = ref(false);
@@ -671,7 +677,7 @@ const cancelGroupCall = () => {
   showGroupCallForm.value = false;
   calleeUserIDs.value = '';
 };
-import { io } from 'socket.io-client';
+
 const socket = ref(io('http://localhost:8080', {
   withCredentials: true,
   transports: ['websocket', 'polling']

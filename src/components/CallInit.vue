@@ -9,7 +9,7 @@
       </h2>
     </div>
 
-    <!-- Input + icône -->
+    <!-- Input et icône -->
     <div class="relative mb-6">
       <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24"
@@ -53,12 +53,15 @@
 <script setup>
 import { ref } from 'vue';
 
+// props à recevoir du composant parent
 const props = defineProps({
   onInit: Function
 });
 
+// variable pour l'identifiant de l'appelant
 const callerUserID = ref('');
 
+// méthode pour initialiser l'appelant
 const initUser = () => {
   props.onInit(callerUserID.value);
 };

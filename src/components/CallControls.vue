@@ -2,7 +2,7 @@
   <div class="bg-white bg-opacity-90 backdrop-blur-lg p-8 rounded-2xl shadow-2xl w-full max-w-md 
     flex flex-col items-center space-y-6 transform transition-all duration-300 hover:shadow-3xl">
     
-    <!-- Input avec icône -->
+    <!-- Input et icône -->
     <div class="relative w-full">
       <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
@@ -22,7 +22,7 @@
 
     <!-- Boutons d'appel -->
     <div class="flex flex-col sm:flex-row gap-4 w-full">
-      <!-- Bouton d'appel audio -->
+      <!-- appel audio -->
       <button
         @click="makeCall(1)"
         class="group relative flex-1 px-6 py-4 bg-gradient-to-r from-green-400 to-emerald-500
@@ -40,7 +40,7 @@
         </div>
       </button>
 
-      <!-- Bouton d'appel vidéo -->
+      <!-- appel vidéo -->
       <button
         @click="makeCall(2)"
         class="group relative flex-1 px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600
@@ -64,12 +64,15 @@
 <script setup>
 import { ref } from 'vue';
 
+// props à recevoir du composant parent
 const props = defineProps({
   onCall: Function
 });
 
+// variable pour l'identifiant de l'appelé
 const calleeUserID = ref('');
 
+// méthode pour l'appel
 const makeCall = (callType) => {
   props.onCall(calleeUserID.value, callType);
 };
