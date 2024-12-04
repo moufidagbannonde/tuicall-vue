@@ -1,130 +1,121 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 p-8">
-    <div class="container mx-auto flex flex-col items-center">
-      <!-- En-tête de page -->
-      <h1
-        class="text-5xl font-black text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 animate-fade-in">
-        Call Application
-      </h1>
-
-      <!-- Formulaire d'initialisation de l'appel -->
-      <div class="w-full max-w-lg transform transition-all duration-500 ease-out">
-        <div
-          class="bg-white backdrop-blur-lg bg-opacity-90 p-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-shadow duration-300">
-          <CallInit :onInit="handleInit" />
-          <CallControls :onCall="call" v-if="!showGroupCallForm"></CallControls>
-
-          <!-- Conteneur d'appel de groupe -->
-          <div class="mt-10 space-y-4">
-            <button v-if="!showGroupCallForm" @click="showGroupCallForm = true" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 px-6 rounded-xl
-                hover:from-blue-700 hover:to-indigo-700 transform hover:-translate-y-1 
-                transition-all duration-300 shadow-lg hover:shadow-xl
-                focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
-              Start Group Call
-            </button>
-          </div>
-
-          <!-- Formulaire d'appel de groupe -->
-          <div v-if="showGroupCallForm" class="mt-8 animate-fade-in-up">
-            <input v-model="calleeUserIDs" type="text"
-              placeholder="Entrer les autres identifiants séparés par des virgules" class="w-full px-5 py-4 rounded-xl border-2 border-gray-200 
-                focus:border-blue-500 focus:ring-2 focus:ring-blue-200 
-                transition-all duration-300 text-gray-700 placeholder-gray-400
-                bg-white bg-opacity-90 backdrop-blur-sm" />
-
-            <div class="flex flex-col space-y-3 mt-6">
-              <!-- bouton de démarrage de l'appel de groupe -->
-              <button  @click="handleStartGroupCall" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl
-                  hover:from-green-600 hover:to-emerald-700 transform hover:-translate-y-1 
-                  transition-all duration-300 shadow-lg hover:shadow-xl">
+  <div>
+    <div class="min-h-screen bg-gradient-to-b from-blue-50 to-indigo-100 p-8">
+      <div class="container mx-auto flex flex-col items-center">
+        <!-- En-tête de page -->
+        <h1
+          class="text-5xl font-black text-center mb-12 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 animate-fade-in">
+          Call Application
+        </h1>
+        <!-- Formulaire d'initialisation de l'appel -->
+        <div class="w-full max-w-lg transform transition-all duration-500 ease-out">
+          <div
+            class="bg-white backdrop-blur-lg bg-opacity-90 p-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-shadow duration-300">
+            <CallInit :onInit="handleInit" />
+            <CallControls :onCall="call" v-if="!showGroupCallForm"></CallControls>
+            <!-- Conteneur d'appel de groupe -->
+            <div class="mt-10 space-y-4">
+              <button v-if="!showGroupCallForm" @click="showGroupCallForm = true" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 px-6 rounded-xl
+                  hover:from-blue-700 hover:to-indigo-700 transform hover:-translate-y-1
+                  transition-all duration-300 shadow-lg hover:shadow-xl
+                  focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
                 Start Group Call
               </button>
-
-              <!--bouton d'annulation de l'appel de groupe-->
-              <button @click="cancelGroupCall" class="bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold py-4 rounded-xl
-                  hover:from-gray-600 hover:to-gray-700 transform hover:-translate-y-1 
-                  transition-all duration-300 shadow-lg hover:shadow-xl">
-                Cancel
-              </button>
+            </div>
+            <!-- Formulaire d'appel de groupe -->
+            <div v-if="showGroupCallForm" class="mt-8 animate-fade-in-up">
+              <input v-model="calleeUserIDs" type="text"
+                placeholder="Entrer les autres identifiants séparés par des virgules" class="w-full px-5 py-4 rounded-xl border-2 border-gray-200
+                  focus:border-blue-500 focus:ring-2 focus:ring-blue-200
+                  transition-all duration-300 text-gray-700 placeholder-gray-400
+                  bg-white bg-opacity-90 backdrop-blur-sm" />
+              <div class="flex flex-col space-y-3 mt-6">
+                <!-- bouton de démarrage de l'appel de groupe -->
+                <button  @click="handleStartGroupCall" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl
+                    hover:from-green-600 hover:to-emerald-700 transform hover:-translate-y-1
+                    transition-all duration-300 shadow-lg hover:shadow-xl">
+                  Start Group Call
+                </button>
+                <!--bouton d'annulation de l'appel de groupe-->
+                <button @click="cancelGroupCall" class="bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold py-4 rounded-xl
+                    hover:from-gray-600 hover:to-gray-700 transform hover:-translate-y-1
+                    transition-all duration-300 shadow-lg hover:shadow-xl">
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      <!--  modal de confirmation d'appel audio  -->
-      <ConfirmModal :is-open="showNoCameraModal" title="Caméra non détectée"
-        message="Aucune caméra n'a été détectée. Voulez-vous passer en appel audio ?" confirm-text="Passer en audio"
-        cancel-text="Annuler" @confirm="handleNoCameraConfirm" @cancel="handleNoCameraCancel" />
-
-      <!-- Interface d'appel et chat -->
-      <div class="w-full flex flex-col lg:flex-row gap-8 mt-8 relative" v-if="isCalleeInitialized">
-        <!-- Interface d'appel -->
-        <div class="flex-1">
-          <TUICallKit class="w-full bg-white bg-opacity-95 rounded-2xl shadow-2xl 
-              transition-all duration-500 ease-in-out transform hover:scale-[1.02]
-              h-80 md:h-[28rem] lg:h-[35rem] xl:h-[48rem] 
-              backdrop-blur-lg border border-white border-opacity-20" id="screen-share" />
-
-          <!-- Contrôles des boutons de partage d'écran -->
-          <div class="screen-share-controls flex space-x-4 mt-4">
-            <!-- Bouton de partage d'écran -->
-            <button @click="startScreenShare" class="px-8 py-4 rounded-xl font-bold text-white
-                    bg-gradient-to-r from-blue-500 to-indigo-600
-                    hover:from-blue-600 hover:to-indigo-700
-                    transform hover:-translate-y-1 transition-all duration-300
-                    shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
-                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-              :disabled="isScreenSharing || currentScreenSharer !== null">
-              Partager l'écran
-            </button>
-            <!-- bouton d'arrêt de partage d'écran -->
-            <button @click="stopScreenCapture" :disabled="!isScreenSharing || currentScreenSharer !== currentUserID"
-              class="px-8 py-4 rounded-xl font-bold text-white
-                bg-gradient-to-r from-red-500 to-red-600
-                hover:from-red-600 hover:to-red-700
-                transform hover:-translate-y-1 transition-all duration-300
-                shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
-                focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
-              Arrêter le partage
-            </button>
-            <!-- Bouton Chat -->
-            <button  @click="toggleChat" class="fixed right-0 top-1/2 transform -translate-y-1/2 z-50
-                 bg-gradient-to-r from-blue-600 to-indigo-600 
-                 text-white p-3 rounded-l-lg shadow-lg
-                 hover:from-blue-700 hover:to-indigo-700
-                 transition-all duration-300" :class="{ 'right-96': isChatOpen }">
-              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
-                v-if="!isChatOpen">
-                <path
-                  d="M240-400h320v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-              </svg>
-              <span v-else class="flex items-center">
-                ❌
-              </span>
-            </button>
+        <!--  modal de confirmation d'appel audio  -->
+        <ConfirmModal :is-open="showNoCameraModal" title="Caméra non détectée"
+          message="Aucune caméra n'a été détectée. Voulez-vous passer en appel audio ?" confirm-text="Passer en audio"
+          cancel-text="Annuler" @confirm="handleNoCameraConfirm" @cancel="handleNoCameraCancel" />
+        <!-- Interface d'appel et chat -->
+        <div class="w-full flex flex-col lg:flex-row gap-8 mt-8 relative" v-if="isCalleeInitialized">
+          <!-- Interface d'appel -->
+          <div class="flex-1">
+            <TUICallKit class="w-full bg-white bg-opacity-95 rounded-2xl shadow-2xl
+                transition-all duration-500 ease-in-out transform hover:scale-[1.02]
+                h-80 md:h-[28rem] lg:h-[35rem] xl:h-[48rem]
+                backdrop-blur-lg border border-white border-opacity-20" id="screen-share" />
+            <!-- Contrôles des boutons de partage d'écran -->
+            <div class="screen-share-controls flex space-x-4 mt-4">
+              <!-- Bouton de partage d'écran -->
+              <button @click="startScreenShare" class="px-8 py-4 rounded-xl font-bold text-white
+                      bg-gradient-to-r from-blue-500 to-indigo-600
+                      hover:from-blue-600 hover:to-indigo-700
+                      transform hover:-translate-y-1 transition-all duration-300
+                      shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                :disabled="isScreenSharing || currentScreenSharer !== null">
+                Partager l'écran
+              </button>
+              <!-- bouton d'arrêt de partage d'écran -->
+              <button @click="stopScreenCapture" :disabled="!isScreenSharing || currentScreenSharer !== currentUserID"
+                class="px-8 py-4 rounded-xl font-bold text-white
+                  bg-gradient-to-r from-red-500 to-red-600
+                  hover:from-red-600 hover:to-red-700
+                  transform hover:-translate-y-1 transition-all duration-300
+                  shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
+                  focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50">
+                Arrêter le partage
+              </button>
+              <!-- Bouton Chat -->
+              <button  @click="toggleChat" class="fixed right-0 top-1/2 transform -translate-y-1/2 z-50
+                   bg-gradient-to-r from-blue-600 to-indigo-600
+                   text-white p-3 rounded-l-lg shadow-lg
+                   hover:from-blue-700 hover:to-indigo-700
+                   transition-all duration-300" :class="{ 'right-96': isChatOpen }">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"
+                  v-if="!isChatOpen">
+                  <path
+                    d="M240-400h320v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
+                </svg>
+                <span v-else class="flex items-center">
+                  ❌
+                </span>
+              </button>
+            </div>
+          </div>
+          <!-- interface de chat -->
+          <div v-if="isCalleeInitialized"
+            class="fixed right-0 top-0 h-full w-[400px] transition-transform duration-300 ease-in-out transform z-40"
+            :class="isChatOpen ? 'translate-x-0' : 'translate-x-full'">
+            <ChatComponent ref="chatComponentRef" :callActive="isCalleeInitialized" @message-sent="handleChatMessage(socket)"
+                />
           </div>
         </div>
-
-
-
-        <!-- interface de chat -->
-        <div v-if="isCalleeInitialized"
-          class="fixed right-0 top-0 h-full w-[400px] transition-transform duration-300 ease-in-out transform z-40"
-          :class="isChatOpen ? 'translate-x-0' : 'translate-x-full'">
-          <ChatComponent ref="chatComponentRef" :callActive="isCalleeInitialized" @message-sent="handleChatMessage(socket)"
-              />
-        </div>
-      </div>
-
-      <!-- conteneur affichant les flux distants -->
-      <div class="flex justify-center w-full">
-        <div ref="remoteContainer" id="remoteContainer" class="w-full max-w-4xl mt-8 p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 
-        bg-opacity-90 backdrop-blur-lg  shadow-2xl 
-         border-gray-100 transition-all duration-300
-        hover:shadow-3xl transform hover:scale-[1.01]">
+        <!-- conteneur affichant les flux distants -->
+        <div class="flex justify-center w-full">
+          <div ref="remoteContainer" id="remoteContainer" class="w-full max-w-4xl mt-8 p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4
+          bg-opacity-90 backdrop-blur-lg  shadow-2xl
+           border-gray-100 transition-all duration-300
+          hover:shadow-3xl transform hover:scale-[1.01]">
+          </div>
         </div>
       </div>
     </div>
+    <ConfirmDelete v-if="isModalVisible" :isVisible="isModalVisible" @confirm="handleDelete" @cancel="isModalVisible = false" />
   </div>
 </template>
 
@@ -133,7 +124,7 @@
 <script setup>
 // fonctionnalités de vue
 import { onMounted, onUnmounted, ref, watch } from 'vue';
-// générateur de clés
+// générateur de signature
 import * as GenerateTestUserSig from './debug/GenerateTestUserSig-es';
 // notification(s)
 import { useToast } from 'vue-toastification';
@@ -141,18 +132,23 @@ import { useToast } from 'vue-toastification';
 import { TUICallKit, TUICallKitServer, TUICallType } from '@tencentcloud/call-uikit-vue';
 import Chat from "@tencentcloud/chat";
 import TRTC from 'trtc-js-sdk';
+
+
 // composants
 import CallInit from './components/CallInit.vue';
 import CallControls from './components/CallControls.vue';
 import ConfirmModal from './components/ConfirmModal.vue';
 import ChatComponent from './components/ChatComponent.vue';
+import ConfirmDelete from './components/ConfirmDelete.vue';
+
+
 // socket
 import { io } from 'socket.io-client';
 
 
 // variables d'accès à l'API Tencent Cloud
-const SDKAppID = 20014772;
-const SDKSecretKey = "c1c2a4c234a8ec619d9d64d49f629f9ac900415dd69aeb21312a146e4f474790";
+const SDKAppID = 20015286;
+const SDKSecretKey = "fa622d02c49da71b883b1675e0ef2bc318bd3ece7758104f313cbaa5031e9bc1";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 
@@ -164,7 +160,6 @@ const calleeUserIDs = ref('');
 const groupID = ref('');
 const selectedCallType = ref(TUICallType.VIDEO_CALL);
 const showGroupCallForm = ref(false);
-const toast = useToast();
 const roomID = ref(1);
 const currentScreenSharer = ref(null);
 const isScreenSharing = ref(false);
@@ -173,18 +168,22 @@ const showNoCameraModal = ref(false);
 let pendingCalleeUserID = ref(null);
 let pendingCallType = ref(null);
 
+// variable de notification(s)
+const toast = useToast();
 
-// variables partage écran
+// variables de partage écran
 const isTRTCInitialized = ref(false);
 const screenStream = ref(null);
 let client = ref(null);
 
-// Ajouter les références pour le chat
+// références pour la discussion
 const chatComponentRef = ref(null);
 const chatMessages = ref([]);
 
-// Ajoutez dans les refs
+
 const isChatOpen = ref(false);
+const isModalVisible = ref(false);
+const messageToDelete = ref(null);
 
 /**
  *  cycles de vie
@@ -397,6 +396,7 @@ async function stopScreenCapture() {
       const streamId = screenStream.value.getId();
       console.log('Cleaning up stream:', streamId);
 
+
       const remoteContainer = document.getElementById('remoteContainer');
       if (remoteContainer) {
         const remoteDivs = remoteContainer.querySelectorAll(`[id^="remote-"]`);
@@ -481,6 +481,7 @@ const init = async (callerUserID) => {
   }
 };
 
+// appel de la fonction d'initialisation du TUICallKit
 const handleInit = async (userID) => {
   try {
     await init(userID);
@@ -489,6 +490,7 @@ const handleInit = async (userID) => {
     toast.error("Erreur lors de l'initialisation");
   }
 };
+
 
 /**
  * permet de confirmer l'appel audio en cas de non détection de caméra
@@ -560,9 +562,9 @@ const call = async (calleeUserID, callType) => {
   }
 };
 
-/**
+/*
  * événements
- */
+*/
 
 // permet de gérer les appels entrants
 const handleIncomingCall = (event) => {
@@ -718,6 +720,24 @@ const handleChatMessage = async (message) => {
 // permet d'ouvrir et de fermer la fenêtre de discussion
 const toggleChat = () => {
   isChatOpen.value = !isChatOpen.value;
+};
+
+const deleteMessage = (messageId) => {
+  messageToDelete.value = messageId; // Stocker l'ID du message à supprimer
+  isModalVisible.value = true; // Afficher la modal
+};
+
+const handleDelete = () => {
+  if (messageToDelete.value) {
+    // Émettre l'événement de suppression au serveur
+    socket.value?.emit("deleteMessage", messageToDelete.value); // Émettre l'événement de suppression
+
+    // Suppression
+    messages.value = messages.value.filter((m) => m.id !== messageToDelete.value); 
+
+    messageToDelete.value = null; // Réinitialiser l'ID du message
+    isModalVisible.value = false; // Fermer la modal
+  }
 };
 </script>
 
