@@ -26,21 +26,58 @@
             'message flex items-start',
             message.isMe ? 'justify-end' : 'justify-start',
           ]"
+          @contextmenu.prevent="showContextMenu($event, message)"
         >
           <div class="relative max-w-[70%] group">
             <!-- Affichage du nom de l'utilisateur -->
-            <div v-if="index === 0 || messages[index - 1].userId !== message.userId" class="text-xs text-gray-600 mb-1">
-              {{ getUserName(message) }}
-            </div> 
+            <div
+              v-if="index === 0 || messages[index - 1].userId !== message.userId"
+              class="text-xs text-gray-600 mb-1 flex items-center space-x-2"
+            >
+              <!-- Icône représentant le profil, affichée à gauche si le message n'est pas un message de nous -->
+              <svg
+                v-if="!message.isMe"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+                class="w-5 h-5"
+              >
+                <path
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                />
+              </svg>
+
+              <!-- Nom de l'utilisateur -->
+              <span>{{ getUserId(message) }}</span>
+
+              <!-- Icône représentant le profil, affichée à droite si le message vient des autres participants de l'appel -->
+              <svg
+                v-if="message.isMe"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+                class="w-5 h-5"
+              >
+                <path
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                />
+              </svg>
+              <!-- <span>
+                {{ getUserId(findReplyMessage(message.id)?.userId || '') }}
+              </span> -->
+            </div>
 
             <!-- Message répondu -->
             <div v-if="message.replyTo" class="text-xs text-gray-500 mb-1 italic">
-              En réponse à: {{ findReplyMessage(message.replyTo)?.text }}
+              <!-- En réponse à: 
+              <span>{{ findReplyMessage(message.replyTo)?.text || 'Message introuvable' }}</span> -->
+              <!-- <span class="text-gray-400"> (répondu par {{ message.userId || 'Utilisateur inconnu' }})</span> -->
+              <!-- {{ msg }} -->
             </div>
 
             <!-- Message principal -->
             <div
-              class="p-4 rounded-xl my-2"
+              class="p-4 rounded-xl my-1 transition-all duration-200 relative"
               :class="[
                 message.isMe
                   ? 'bg-blue-500 text-white rounded-br-sm'
@@ -51,6 +88,14 @@
               <p class="m-0 text-sm" v-if="editingMessage?.id !== message.id">
                 {{ message.text }}
               </p>
+
+              <!-- Heure -->
+              <span
+                class="absolute text-xs text-gray-500 font-semibold"
+                :class="[message.isMe ? 'bottom-1 right-2' : 'bottom-1 left-2']"
+              >
+                {{ message.time }}
+              </span>
 
               <!-- Formulaire d'édition de message -->
               <!-- <div v-else class="flex flex-col gap-2">
@@ -88,10 +133,20 @@
                 >
                   <font-awesome-icon icon="edit" class="w-4 h-4 text-gray-500" />
                 </button> -->
+                <!-- <button
+                  v-if="message.isMe"
+                  @click="deleteMessage(message.id, true)"
+                  class="p-1 hover:bg-gray-100 rounded-full"
+                  title="Supprimer pour tout le monde"
+                >
+                  <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
+                </button> -->
+
                 <button
                   v-if="message.isMe"
-                  @click="deleteMessage(message.id)"
-                  class="p-1 hover:bg-gray-100 rounded-full" title="Supprimer pour moi"
+                  @click="deleteMessage(message.id, false)"
+                  class="p-1 hover:bg-gray-100 rounded-full"
+                  title="Supprimer pour moi"
                 >
                   <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
                 </button>
@@ -110,6 +165,23 @@
               v-if="replyingTo?.id === message.id"
               class="mt-3 bg-white rounded-xl p-3 shadow"
             >
+              <div class="flex items-center space-x-2">
+                <!-- Icône représentant le profil -->
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  class="w-5 h-5"
+                >
+                  <path
+                    d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                  />
+                </svg>
+
+                <!-- Nom de l'utilisateur qui répond -->
+                <span>{{ getUserId(message) }}</span>
+              </div>
+
               <input
                 v-model="replyContent"
                 @keyup.enter="confirmReply(message.id)"
@@ -132,9 +204,13 @@
               </div>
             </div>
           </div>
+          <div v-if="contextMenuVisible && selectedMessage === message" class="context-menu">
+            <button @click="deleteMessage(message.id, false)">Supprimer pour moi</button>
+          </div>
         </div>
       </div>
 
+     
       <!-- Zone de saisie de message -->
       <div class="mt-4">
         <div class="flex items-center gap-3">
@@ -154,6 +230,7 @@
         </div>
       </div>
     </div>
+    <ConfirmDelete v-if="isModalVisible" :isVisible="isModalVisible" @confirm="handleDelete" @cancel="isModalVisible = false" />
   </div>
 </template>
 
@@ -170,6 +247,8 @@ import {
   faTrash,
   faReply,
 } from "@fortawesome/free-solid-svg-icons";
+import {ConfirmDelete} from "./ConfirmDelete.vue";
+const isModalVisible = ref(false);
 
 // icônes
 library.add(faPaperPlane, faEdit, faTrash, faReply);
@@ -186,6 +265,7 @@ interface Message {
   userId?: string;
 }
 
+const msg = sessionStorage.getItem("userId");
 // Props pour recevoir les messages externes
 const props = defineProps<{
   callActive: boolean;
@@ -194,6 +274,8 @@ const props = defineProps<{
 // Émettre des événements vers le composant parent
 const emit = defineEmits<{
   (e: "message-sent", message: string): void;
+  (e: "confirm"): void; // Ajout de l'événement confirm
+  (e: "cancel"): void; // Ajout de l'événement cancel
 }>();
 
 // variables pour les messages
@@ -211,11 +293,18 @@ const replyingTo = ref<Message | null>(null);
 const replyContent = ref("");
 
 // Fonction pour récupérer le nom de l'utilisateur à partir de sessionStorage
-const getUserName = (message: Message) => {
-  console.log("message", message);
+const getUserId = (message: Message) => {
+  console.log(" paramètre de la méthode getUserId : ", message);
+  // {id: '1733321265300', text: 'ffdqfdqf', time: '15:07:45', isMe: true, replyTo: '1733321246869'}
   return message.userId;
 };
 
+const getReplyingToUserId = (messageId: string) => {
+  const replyingToMessage = messages.value.find((m) => m.userId === messageId);
+  console.log("userId du message répondu : ", messageId);
+  console.log("Message répondu : ", replyingToMessage);
+  // return replyingToMessage?.userId;
+};
 // connexion au socket pour la communication en temps réel
 const connectSocket = () => {
   socket.value = io("http://localhost:8080"); // URL du serveur
@@ -236,9 +325,12 @@ const connectSocket = () => {
     messages.value = messages.value.filter((m) => m.id !== messageId);
   });
 
-  socket.value.on("messageReplied", (data: { replyTo: string; message: string }) => {
-    receiveMessage(data.message, data.replyTo);
-  });
+  socket.value.on(
+    "messageReplied",
+    (data: { replyTo: string; message: string; userId: string }) => {
+      receiveMessage(data.message, data.replyTo, data.userId);
+    }
+  );
 };
 
 // envoi du message
@@ -255,7 +347,12 @@ const sendMessage = () => {
       text: newMessage.value,
       time: new Date().toLocaleTimeString(),
       isMe: true,
-      userId: (lastMessage && lastMessage.isMe && lastMessage.userId) ? lastMessage.userId : (userID ? userID : ""),
+      userId:
+        lastMessage && lastMessage.isMe && lastMessage.userId
+          ? lastMessage.userId
+          : userID
+          ? userID
+          : "",
     };
     messages.value.push(newMsg);
     socket.value.emit("message", { text: newMessage.value, userId: newMsg.userId });
@@ -264,19 +361,28 @@ const sendMessage = () => {
     nextTick(() => {
       scrollToBottom();
     });
+    localStorage.setItem("messages", JSON.stringify(messages.value));
   }
 };
 
 // Réception des messages externes (d'autres participants)
 const receiveMessage = (text: string, replyTo?: string, userId?: string) => {
-  messages.value.push({
+  const newMessage: Message = {
     id: Date.now().toString(),
     text,
     time: new Date().toLocaleTimeString(),
     isMe: false,
     replyTo,
     userId: userId ? userId : "",
-  });
+  };
+
+  messages.value.push(newMessage);
+
+  // Mettre à jour le localStorage avec le nouveau message
+  const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
+  storedMessages.push(newMessage);
+  localStorage.setItem("messages", JSON.stringify(storedMessages));
+
   nextTick(() => {
     scrollToBottom();
   });
@@ -303,7 +409,7 @@ const confirmEdit = (messageId: string) => {
   }
 
   cancelEdit();
-//   toast.success("Message modifié");
+  //   toast.success("Message modifié");
 };
 
 // annulation de l'édition
@@ -312,19 +418,47 @@ const cancelEdit = () => {
   editContent.value = "";
 };
 
+const messageToDelete = ref<any>();
+const forEvery = ref(false);
 // suppression du message
-const deleteMessage = (messageId: string) => {
-//   if (confirm("Voulez-vous vraiment supprimer ce message ?")) {
-    socket.value?.emit("deleteMessage", messageId);
-    messages.value = messages.value.filter((m) => m.id !== messageId);
-    // toast.success("Message supprimé");
-//   }
-};
+const deleteMessage = (messageId: string, forEveryone: boolean = false) => {
+   messageToDelete.value = messageId;
+   forEvery.value = forEveryone;
+   isModalVisible.value = true;
+  };
 
+  const handleDelete = () => {
+    // Récupérer les messages du local storage
+    const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
+
+    // Filtrer les messages pour exclure celui à supprimer
+    const updatedMessages = storedMessages.filter((m: Message) => m.id !== messageToDelete.value);
+
+    // Mettre à jour le local storage avec la nouvelle liste
+    localStorage.setItem("messages", JSON.stringify(updatedMessages));
+
+    // Émettre l'événement de suppression selon l'option choisie
+    if (forEvery.value) {
+      socket.value?.emit("deleteMessageForEveryone", messageToDelete.value);
+      toast.success("Message supprimé pour tous");
+    } else {
+      socket.value?.emit("deleteMessage", messageToDelete.value); // Suppression pour soi
+      toast.success("Message supprimé ");
+    }
+
+    messages.value = messages.value.filter((m) => m.id !== messageToDelete.value);
+    messageToDelete.value = null;
+    isModalVisible.value = false;
+    // toast.success("Message supprimé");
+  }
+
+
+const replyingUserId = ref("");
 //  réponse au message
 const startReply = (message: Message) => {
   replyingTo.value = message;
   replyContent.value = "";
+  replyingUserId.value = sessionStorage.getItem("userId") || "";
 };
 
 // confirmation de la réponse
@@ -342,22 +476,45 @@ const confirmReply = (messageId: string) => {
     time: new Date().toLocaleTimeString(),
     isMe: true,
     replyTo: messageId,
-    // userId: userID ? userID : ""
+    userId: replyingUserId.value,
   };
   messages.value.push(newMsg);
 
   // Envoi de la réponse via le socket
   socket.value?.emit("replyMessage", {
     replyTo: messageId,
+    userId: userID,
     message: replyContent.value,
   });
 
   cancelReply();
-  toast.success("Réponse envoyée");
+  // toast.success("Réponse envoyée");
 
   nextTick(() => {
     scrollToBottom();
   });
+};
+
+// ... autres variables ...
+const showDialogVisible = ref(false);
+const dialogMessage = ref("");
+
+// Fonction pour afficher la boîte de dialogue
+const showDialog = (message: string, onConfirm: () => void) => {
+  dialogMessage.value = message;
+  showDialogVisible.value = true;
+
+  // Gérer la confirmation
+  const confirmHandler = () => {
+    onConfirm();
+    showDialogVisible.value = false;
+  };
+
+  // Gérer l'annulation
+  const cancelHandler = () => {
+    showDialogVisible.value = false;
+  };
+
 };
 
 const cancelReply = () => {
@@ -375,19 +532,40 @@ const scrollToBottom = () => {
   }
 };
 
+const contextMenuVisible = ref(false);
+const selectedMessage = ref<Message | null>(null);
 
+// Fonction pour afficher le menu contextuel
+const showContextMenu = (event: MouseEvent, message: Message) => {
+  event.preventDefault(); // Empêche le menu contextuel par défaut
+  contextMenuVisible.value = true;
+  selectedMessage.value = message;
 
+  // Positionner le menu contextuel
+  const contextMenu = document.querySelector('.context-menu');
+  if (contextMenu) {
+    contextMenu.style.top = `${event.clientY}px`;
+    contextMenu.style.left = `${event.clientX}px`;
+  }
+};
 
-// Connexion au socket lors du montage du composant
+// Masquer le menu contextuel lorsque l'utilisateur clique ailleurs
+const hideContextMenu = () => {
+  contextMenuVisible.value = false;
+  selectedMessage.value = null;
+};
+
+// Écouter les clics pour masquer le menu contextuel
 onMounted(() => {
   connectSocket();
+  window.addEventListener('click', hideContextMenu);
 });
 
-// Déconnexion du socket lors de la destruction du composant
 onBeforeUnmount(() => {
   if (socket.value) {
     socket.value.disconnect();
   }
+  window.removeEventListener('click', hideContextMenu);
 });
 
 // Exposer la méthode receiveMessage pour le composant parent
