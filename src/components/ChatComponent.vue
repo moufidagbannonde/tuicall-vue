@@ -20,7 +20,7 @@
         ref="messagesContainer"
       >
         <div
-          v-for="message in messages"
+          v-for="(message, index) in messages"
           :key="message.id"
           :class="[
             'message flex items-start',
@@ -29,7 +29,7 @@
         >
           <div class="relative max-w-[70%] group">
             <!-- Affichage du nom de l'utilisateur -->
-             <div class="text-xs text-gray-600 mb-1">
+            <div v-if="index === 0 || messages[index - 1].userId !== message.userId" class="text-xs text-gray-600 mb-1">
               {{ getUserName(message) }}
             </div> 
 
@@ -212,15 +212,6 @@ const replyContent = ref("");
 
 // Fonction pour récupérer le nom de l'utilisateur à partir de sessionStorage
 const getUserName = (message: Message) => {
-  // if (isMe) {
-  //   return "Vous"; // Retourne "Vous" si c'est l'utilisateur actuel
-  // }
-
-  // // Récupère les informations de l'utilisateur depuis sessionStorage
-  // const storedUserName = sessionStorage.getItem(`userId`);
-  //   console.log("storedUserName", storedUserName);
-  // // Si un nom est trouvé, retourne-le, sinon "Utilisateur inconnu"
-  // return storedUserName ? storedUserName : "Utilisateur inconnu";
   console.log("message", message);
   return message.userId;
 };
@@ -258,12 +249,13 @@ const sendMessage = () => {
     return;
   }
   if (newMessage.value.trim()) {
+    const lastMessage = messages.value[messages.value.length - 1];
     const newMsg: Message = {
       id: Date.now().toString(),
       text: newMessage.value,
       time: new Date().toLocaleTimeString(),
       isMe: true,
-      userId: userID ? userID : "",
+      userId: (lastMessage && lastMessage.isMe && lastMessage.userId) ? lastMessage.userId : (userID ? userID : ""),
     };
     messages.value.push(newMsg);
     socket.value.emit("message", { text: newMessage.value, userId: newMsg.userId });
@@ -382,6 +374,9 @@ const scrollToBottom = () => {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
   }
 };
+
+
+
 
 // Connexion au socket lors du montage du composant
 onMounted(() => {
