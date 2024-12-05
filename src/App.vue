@@ -51,7 +51,7 @@
           message="Aucune caméra n'a été détectée. Voulez-vous passer en appel audio ?" confirm-text="Passer en audio"
           cancel-text="Annuler" @confirm="handleNoCameraConfirm" @cancel="handleNoCameraCancel" />
         <!-- Interface d'appel et chat -->
-        <div class="w-full flex flex-col lg:flex-row gap-8 mt-8 relative" v-if="isCalleeInitialized">
+        <div class="w-full flex flex-col lg:flex-row gap-8 mt-8 relative" v-if="isCallStarted || isCalleeInitialized">
           <!-- Interface d'appel -->
           <div class="flex-1">
             <TUICallKit class="w-full bg-white bg-opacity-95 rounded-2xl shadow-2xl
@@ -86,13 +86,11 @@
                    text-white p-3 rounded-l-lg shadow-lg
                    hover:from-blue-700 hover:to-indigo-700
                    transition-all duration-300" :class="{ 'right-96': isChatOpen }">
-                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"
-                  v-if="!isChatOpen">
-                  <path
-                    d="M240-400h320v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" fill="#ffffff" />
+                   <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#ffffff" v-if="!isChatOpen">
+                  <path d="M12 2C6.48 2 2 6.48 2 12c0 2.21.79 4.23 2.09 5.83L2 22l4.17-1.09C8.77 20.21 10.79 21 12 21c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.1 0-2.1-.24-3-1.09l-1.41 1.41C9.79 20.78 10.87 21 12 21c4.41 0 8-3.59 8-8s-3.59-8-8-8-8 3.59-8 8c0 1.13.22 2.21.59 3.19l1.41-1.41C9.9 9.24 10.9 9 12 9c3.31 0 6 2.69 6 6s-2.69 6-6 6z"/>
                 </svg>
                 <span v-else class="flex items-center">
-                  ❌
+                  <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
                 </span>
               </button>
             </div>
@@ -147,8 +145,8 @@ import { io } from 'socket.io-client';
 
 
 // variables d'accès à l'API Tencent Cloud
-const SDKAppID = 20015286;
-const SDKSecretKey = "fa622d02c49da71b883b1675e0ef2bc318bd3ece7758104f313cbaa5031e9bc1";
+const SDKAppID = 20015336;
+const SDKSecretKey = "55ac0e3ef6475f6545bb089b0423017987d28a8900f00408590018618b01afea";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 
@@ -335,6 +333,10 @@ watch(currentScreenSharer, (newVal) => {
   }
 });
 
+watch(isCalleeInitialized, (newValue) => {
+  console.log("La valeur de isCalleeInitialized a changé et est maintenant : ", newValue);
+})
+
 // watch pour surveiller les changements de l'appel
 watch(isCallStarted, (newValue) => {
   console.log("La valeur de isCallStarted a changé et est maintenant : ", newValue);
@@ -472,7 +474,6 @@ const init = async (callerUserID) => {
 
     // Initialiser TRTC après TUICallKit
     await initTRTC(callerUserID);
-
     isCalleeInitialized.value = true;
     toast.success("TUICallKit initialisé avec succès !");
   } catch (error) {
@@ -548,7 +549,7 @@ const call = async (calleeUserID, callType) => {
         description: callType === TUICallType.VIDEO_CALL ? 'Appel vidéo' : 'Appel audio'
       }
     });
-
+    isCalleeInitialized.value = true;
     isCallStarted.value = true;
     toast.info("Appel en cours...");
   } catch (error) {

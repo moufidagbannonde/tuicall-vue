@@ -22,152 +22,22 @@
         <div
           v-for="(message, index) in messages"
           :key="message.id"
-          :class="[
-            'message flex items-start',
-            message.isMe ? 'justify-end' : 'justify-start',
-          ]"
-          @contextmenu.prevent="showContextMenu($event, message)"
         >
-          <div class="relative max-w-[70%] group">
-            <!-- Affichage du nom de l'utilisateur -->
-            <div
-              v-if="index === 0 || messages[index - 1].userId !== message.userId"
-              class="text-xs text-gray-600 mb-1 flex items-center space-x-2"
-            >
-              <!-- Icône représentant le profil, affichée à gauche si le message n'est pas un message de nous -->
-              <svg
-                v-if="!message.isMe"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-                class="w-5 h-5"
-              >
-                <path
-                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                />
-              </svg>
+          <!-- Affichage de l'heure de la discussion -->
+          <div v-if="shouldShowTime(index)" class="text-center text-gray-500 text-xs my-2">
+            {{ formatTime(message.time) }} 
+          </div>
 
-              <!-- Nom de l'utilisateur -->
-              <span>{{ getUserId(message) }}</span>
-
-              <!-- Icône représentant le profil, affichée à droite si le message vient des autres participants de l'appel -->
-              <svg
-                v-if="message.isMe"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-                class="w-5 h-5"
-              >
-                <path
-                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                />
-              </svg>
-              <!-- <span>
-                {{ getUserId(findReplyMessage(message.id)?.userId || '') }}
-              </span> -->
-            </div>
-
-            <!-- Message répondu -->
-            <div v-if="message.replyTo" class="text-xs text-gray-500 mb-1 italic">
-              <!-- En réponse à: 
-              <span>{{ findReplyMessage(message.replyTo)?.text || 'Message introuvable' }}</span> -->
-              <!-- <span class="text-gray-400"> (répondu par {{ message.userId || 'Utilisateur inconnu' }})</span> -->
-              <!-- {{ msg }} -->
-            </div>
-
-            <!-- Message principal -->
-            <div
-              class="p-4 rounded-xl my-1 transition-all duration-200 relative"
-              :class="[
-                message.isMe
-                  ? 'bg-blue-500 text-white rounded-br-sm'
-                  : 'bg-gray-200 text-gray-900 rounded-bl-sm',
-              ]"
-            >
-              <!-- Contenu du message -->
-              <p class="m-0 text-sm" v-if="editingMessage?.id !== message.id">
-                {{ message.text }}
-              </p>
-
-              <!-- Heure -->
-              <span
-                class="absolute text-xs text-gray-500 font-semibold"
-                :class="[message.isMe ? 'bottom-1 right-2' : 'bottom-1 left-2']"
-              >
-                {{ message.time }}
-              </span>
-
-              <!-- Formulaire d'édition de message -->
-              <!-- <div v-else class="flex flex-col gap-2">
-                <input
-                  v-model="editContent"
-                  @keyup.enter="confirmEdit(message.id)"
-                  class="rounded-lg px-3 py-1 text-gray-800 w-full border border-gray-300 focus:ring-2 focus:ring-blue-200"
-                  type="text"
-                />
-                <div class="flex gap-2 justify-end">
-                  <button
-                    @click="cancelEdit"
-                    class="text-xs text-gray-500 hover:text-gray-700"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    @click="confirmEdit(message.id)"
-                    class="text-xs text-blue-500 hover:text-blue-700"
-                  >
-                    Confirmer
-                  </button>
-                </div>
-              </div> -->
-
-              <!-- Actions sur le(s) message(s) -->
+          <div :class="['message flex items-start mb-3', message.isMe ? 'justify-end' : 'justify-start']">
+            <div class="relative max-w-[70%] group">
+              <!-- Affichage du nom de l'utilisateur -->
               <div
-                v-if="message.isMe || !message.isMe"
-                class="absolute top-0 right-0 -mt-2 hidden group-hover:flex gap-1 bg-white rounded-full shadow-lg p-1"
+                v-if="index === 0 || messages[index - 1].userId !== message.userId"
+                class="text-xs text-gray-600 mb-1 flex items-center space-x-2"
               >
-                <!-- <button
-                  v-if="message.isMe"
-                  @click="startEdit(message)"
-                  class="p-1 hover:bg-gray-100 rounded-full"
-                >
-                  <font-awesome-icon icon="edit" class="w-4 h-4 text-gray-500" />
-                </button> -->
-                <!-- <button
-                  v-if="message.isMe"
-                  @click="deleteMessage(message.id, true)"
-                  class="p-1 hover:bg-gray-100 rounded-full"
-                  title="Supprimer pour tout le monde"
-                >
-                  <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
-                </button> -->
-
-                <button
-                  v-if="message.isMe"
-                  @click="deleteMessage(message.id, false)"
-                  class="p-1 hover:bg-gray-100 rounded-full"
-                  title="Supprimer pour moi"
-                >
-                  <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
-                </button>
-                <button
-                  v-if="!message.isMe"
-                  @click="startReply(message)"
-                  class="p-1 hover:bg-gray-100 rounded-full"
-                >
-                  <font-awesome-icon icon="reply" class="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-            </div>
-
-            <!-- Zone de réponse -->
-            <div
-              v-if="replyingTo?.id === message.id"
-              class="mt-3 bg-white rounded-xl p-3 shadow"
-            >
-              <div class="flex items-center space-x-2">
-                <!-- Icône représentant le profil -->
+                <!-- Icône représentant le profil, affichée à gauche si le message n'est pas un message de nous -->
                 <svg
+                  v-if="!message.isMe"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="currentColor"
                   viewBox="0 0 24 24"
@@ -178,39 +48,119 @@
                   />
                 </svg>
 
-                <!-- Nom de l'utilisateur qui répond -->
+                <!-- Nom de l'utilisateur -->
                 <span>{{ getUserId(message) }}</span>
+
+                <!-- Icône représentant le profil, affichée à droite si le message vient des autres participants de l'appel -->
+                <svg
+                  v-if="message.isMe"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  class="w-5 h-5"
+                >
+                  <path
+                    d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                  />
+                </svg>
+                <!-- <span>
+                  {{ getUserId(findReplyMessage(message.id)?.userId || '') }}
+                </span> -->
               </div>
 
-              <input
-                v-model="replyContent"
-                @keyup.enter="confirmReply(message.id)"
-                class="w-full rounded-lg border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-blue-200"
-                placeholder="Votre réponse..."
-              />
-              <div class="flex justify-end gap-2 mt-2">
-                <button
-                  @click="cancelReply"
-                  class="text-xs text-gray-500 hover:text-gray-700"
+              <!-- Message principal -->
+              <div
+                class="p-4 rounded-lg my-2 transition-all duration-200 relative shadow-md group"
+                :class="[
+                  message.isMe
+                    ? 'bg-blue-500 text-white rounded-br-lg'
+                    : 'bg-gray-200 text-gray-900 rounded-bl-lg',
+                ]"
+              >
+                <!-- Contenu du message -->
+                <p
+                  class="m-0 text-sm break-words pr-10"
+                  v-if="editingMessage?.id !== message.id"
                 >
-                  Annuler
-                </button>
-                <button
-                  @click="confirmReply(message.id)"
-                  class="text-xs text-blue-500 hover:text-blue-700"
+                  {{ message.text }}
+                </p>
+
+                <!-- Heure -->
+                <span v-if="index === 0 || messages[index - 1].time !== message.time"                class="absolute text-xs font-semibold opacity-70"
+                  :class="[
+                    message.isMe
+                      ? 'bottom-1 right-2 text-white'
+                      : 'bottom-1 right-2 text-gray-500',
+                  ]"
                 >
-                  Répondre
-                </button>
+                  {{ message.time }}
+                </span>
+
+                <!-- Actions sur le(s) message(s) -->
+                <div
+                  v-if="message.isMe || !message.isMe"
+                  class="absolute top-0 right-0 hidden group-hover:flex gap-1 bg-white rounded-full shadow-lg p-1"
+                >
+                  <!-- Bouton de suppression de message pour moi -->
+                  <button
+                    v-if="message.isMe"
+                    @click="deleteMessage(message.id, false)"
+                    class="p-1 hover:bg-gray-100 rounded-full"
+                    title="Supprimer pour moi"
+                  >
+                    <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
+                  </button>
+                </div>
+              </div>
+
+              <!-- Zone de réponse -->
+              <div
+                v-if="replyingTo?.id === message.id"
+                class="mt-3 bg-white rounded-lg p-3 shadow-md"
+              >
+                <div class="flex items-center space-x-2">
+                  <!-- Icône représentant le profil -->
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    class="w-5 h-5"
+                  >
+                    <path
+                      d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                    />
+                  </svg>
+
+                  <!-- Nom de l'utilisateur qui répond -->
+                  <span>{{ getUserId(message) }}</span>
+                </div>
+
+                <input
+                  v-model="replyContent"
+                  @keyup.enter="confirmReply(message.id)"
+                  class="w-full rounded-lg border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-blue-200"
+                  placeholder="Votre réponse..."
+                />
+                <div class="flex justify-end gap-2 mt-2">
+                  <button
+                    @click="cancelReply"
+                    class="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    @click="confirmReply(message.id)"
+                    class="text-xs text-blue-500 hover:text-blue-700"
+                  >
+                    Répondre
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <div v-if="contextMenuVisible && selectedMessage === message" class="context-menu">
-            <button @click="deleteMessage(message.id, false)">Supprimer pour moi</button>
           </div>
         </div>
       </div>
 
-     
       <!-- Zone de saisie de message -->
       <div class="mt-4">
         <div class="flex items-center gap-3">
@@ -221,22 +171,45 @@
             type="text"
             placeholder="Écrivez votre message..."
           />
-          <button
-            @click="sendMessage"
-            class="rounded-full p-3 bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg transition"
-          >
-            <font-awesome-icon icon="paper-plane" class="w-5 h-5" />
+          <button @click="sendMessage" class="p-3 text-blue">
+            <svg
+              data-v-8765cc6e
+              class="svg-inline--fa fa-paper-plane w-5 h-5"
+              aria-hidden="true"
+              focusable="false"
+              data-prefix="fas"
+              data-icon="paper-plane"
+              role="img"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 512 512"
+            >
+              <path
+                class
+                fill="#3B82F6"
+                d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480l0-83.6c0-4 1.5-7.8 4.2-10.8L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"
+              ></path>
+            </svg>
           </button>
         </div>
       </div>
     </div>
-    <ConfirmDelete v-if="isModalVisible" :isVisible="isModalVisible" @confirm="handleDelete" @cancel="isModalVisible = false" />
+    <ConfirmDelete
+      v-if="isModalVisible"
+      :isVisible="isModalVisible"
+      @confirm="handleDelete"
+      @cancel="isModalVisible = false"
+    />
+    <CustomNotification
+      v-if="notificationVisible"
+      :message="notificationMessage"
+      :type="notificationType"
+    />
   </div>
 </template>
 
-<script setup lang="ts">
+<script lang="ts" setup>
 // import des fonctions de vue
-import { ref, nextTick, onMounted, onBeforeUnmount } from "vue";
+import { ref, nextTick, onMounted, onBeforeUnmount, computed } from "vue";
 import { useToast } from "vue-toastification";
 import { io } from "socket.io-client";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
@@ -247,29 +220,17 @@ import {
   faTrash,
   faReply,
 } from "@fortawesome/free-solid-svg-icons";
-import {ConfirmDelete} from "./ConfirmDelete.vue";
+import ConfirmDelete from "./ConfirmDelete.vue";
+import * as ChatComponent from "../utils/ChatComponent";
+import CustomNotification from "./CustomNotification.vue";
+const props = defineProps<{
+  callActive: boolean;
+}>();
 const isModalVisible = ref(false);
 
 // icônes
 library.add(faPaperPlane, faEdit, faTrash, faReply);
 // notification(s)
-const toast = useToast();
-
-// Interface pour les messages
-interface Message {
-  id: string;
-  text: string;
-  time: string;
-  isMe: boolean;
-  replyTo?: string;
-  userId?: string;
-}
-
-const msg = sessionStorage.getItem("userId");
-// Props pour recevoir les messages externes
-const props = defineProps<{
-  callActive: boolean;
-}>();
 
 // Émettre des événements vers le composant parent
 const emit = defineEmits<{
@@ -295,7 +256,7 @@ const replyContent = ref("");
 // Fonction pour récupérer le nom de l'utilisateur à partir de sessionStorage
 const getUserId = (message: Message) => {
   console.log(" paramètre de la méthode getUserId : ", message);
-  // {id: '1733321265300', text: 'ffdqfdqf', time: '15:07:45', isMe: true, replyTo: '1733321246869'}
+
   return message.userId;
 };
 
@@ -322,6 +283,7 @@ const connectSocket = () => {
   });
 
   socket.value.on("messageDeleted", (messageId: string) => {
+    console.log("Message supprimé : ", messageId);
     messages.value = messages.value.filter((m) => m.id !== messageId);
   });
 
@@ -335,9 +297,10 @@ const connectSocket = () => {
 
 // envoi du message
 const userID = sessionStorage.getItem("userId");
+
 const sendMessage = () => {
   if (!props.callActive) {
-    toast.error("Impossible d'envoyer un message : appel non actif");
+    showNotification("Impossible d'envoyer un message : appel non actif", "error");
     return;
   }
   if (newMessage.value.trim()) {
@@ -362,6 +325,7 @@ const sendMessage = () => {
       scrollToBottom();
     });
     localStorage.setItem("messages", JSON.stringify(messages.value));
+    showNotification("Message envoyé avec succès", "success");
   }
 };
 
@@ -422,36 +386,38 @@ const messageToDelete = ref<any>();
 const forEvery = ref(false);
 // suppression du message
 const deleteMessage = (messageId: string, forEveryone: boolean = false) => {
-   messageToDelete.value = messageId;
-   forEvery.value = forEveryone;
-   isModalVisible.value = true;
-  };
+  messageToDelete.value = messageId;
+  forEvery.value = forEveryone;
+  isModalVisible.value = true;
+};
 
-  const handleDelete = () => {
-    // Récupérer les messages du local storage
-    const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
+const handleDelete = () => {
+  console.log("Suppression du message : ", messageToDelete.value);
+  // Récupérer les messages du local storage
+  const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
 
-    // Filtrer les messages pour exclure celui à supprimer
-    const updatedMessages = storedMessages.filter((m: Message) => m.id !== messageToDelete.value);
+  // Filtrer les messages pour exclure celui à supprimer
+  const updatedMessages = storedMessages.filter(
+    (m: Message) => m.id !== messageToDelete.value
+  );
 
-    // Mettre à jour le local storage avec la nouvelle liste
-    localStorage.setItem("messages", JSON.stringify(updatedMessages));
+  // Mettre à jour le local storage avec la nouvelle liste
+  localStorage.setItem("messages", JSON.stringify(updatedMessages));
 
-    // Émettre l'événement de suppression selon l'option choisie
-    if (forEvery.value) {
-      socket.value?.emit("deleteMessageForEveryone", messageToDelete.value);
-      toast.success("Message supprimé pour tous");
-    } else {
-      socket.value?.emit("deleteMessage", messageToDelete.value); // Suppression pour soi
-      toast.success("Message supprimé ");
-    }
-
-    messages.value = messages.value.filter((m) => m.id !== messageToDelete.value);
-    messageToDelete.value = null;
-    isModalVisible.value = false;
-    // toast.success("Message supprimé");
+  // Émettre l'événement de suppression selon l'option choisie
+  if (forEvery.value) {
+    socket.value?.emit("deleteMessageForEveryone", messageToDelete.value);
+    showNotification("Message supprimé pour tous", "success");
+  } else {
+    socket.value?.emit("deleteMessage", messageToDelete.value); // Suppression pour soi
+    showNotification("Message supprimé ", "success");
   }
 
+  messages.value = messages.value.filter((m) => m.id !== messageToDelete.value);
+  messageToDelete.value = null;
+  isModalVisible.value = false;
+  // toast.success("Message supprimé");
+};
 
 const replyingUserId = ref("");
 //  réponse au message
@@ -465,7 +431,7 @@ const startReply = (message: Message) => {
 const confirmReply = (messageId: string) => {
   if (!replyContent.value.trim()) return;
   if (!props.callActive) {
-    toast.error("Impossible de répondre : appel non actif");
+    showNotification("Impossible de répondre : appel non actif", "error");
     return;
   }
 
@@ -488,7 +454,7 @@ const confirmReply = (messageId: string) => {
   });
 
   cancelReply();
-  // toast.success("Réponse envoyée");
+  //showNotification("Réponse envoyée", "success");
 
   nextTick(() => {
     scrollToBottom();
@@ -514,7 +480,6 @@ const showDialog = (message: string, onConfirm: () => void) => {
   const cancelHandler = () => {
     showDialogVisible.value = false;
   };
-
 };
 
 const cancelReply = () => {
@@ -541,12 +506,12 @@ const showContextMenu = (event: MouseEvent, message: Message) => {
   contextMenuVisible.value = true;
   selectedMessage.value = message;
 
-  // Positionner le menu contextuel
-  const contextMenu = document.querySelector('.context-menu');
-  if (contextMenu) {
-    contextMenu.style.top = `${event.clientY}px`;
-    contextMenu.style.left = `${event.clientX}px`;
-  }
+  //Positionner le menu contextuel
+  // const contextMenu = document.querySelector(".context-menu");
+  // if (contextMenu) {
+  //   contextMenu.style.top = `${event.clientY}px`;
+  //   contextMenu.style.left = `${event.clientX}px`;
+  // }
 };
 
 // Masquer le menu contextuel lorsque l'utilisateur clique ailleurs
@@ -558,20 +523,63 @@ const hideContextMenu = () => {
 // Écouter les clics pour masquer le menu contextuel
 onMounted(() => {
   connectSocket();
-  window.addEventListener('click', hideContextMenu);
+  window.addEventListener("click", hideContextMenu);
 });
 
 onBeforeUnmount(() => {
   if (socket.value) {
     socket.value.disconnect();
   }
-  window.removeEventListener('click', hideContextMenu);
+  window.removeEventListener("click", hideContextMenu);
 });
 
 // Exposer la méthode receiveMessage pour le composant parent
-defineExpose({
-  receiveMessage,
-});
+// defineExpose({
+//   receiveMessage,
+// });
+
+const notificationVisible = ref(false);
+const notificationMessage = ref("");
+const notificationType = ref("info"); // info, success, error, etc.
+
+// Fonction pour afficher la notification
+const showNotification = (message: string, type = "info") => {
+  notificationMessage.value = message;
+  notificationType.value = type;
+  notificationVisible.value = true;
+
+  setTimeout(() => {
+    notificationVisible.value = false; // Masquer après 3 secondes
+  }, 3000); // Afficher pendant 3 secondes
+};
+
+// Fonction pour déterminer si l'heure doit être affichée
+const shouldShowTime = (index: number): boolean => {
+  if (index === 0) return true; // Toujours afficher pour le premier message
+
+  // Accéder à messages.value pour obtenir le tableau de messages
+  const currentTime = messages.value[index].time; // Récupérer l'heure directement
+  const previousTime = messages.value[index - 1].time; // Récupérer l'heure du message précédent
+
+  // Vérifiez si les heures sont valides
+  if (!currentTime || !previousTime) {
+    console.error("Invalid time format for message:", currentTime);
+    return false; // Ne pas afficher l'heure si elle est invalide
+  }
+
+  // Convertir les heures en objets Date pour comparer
+  const currentDate = new Date(`1970-01-01T${currentTime}Z`); // Utiliser une date fixe pour la comparaison
+  const previousDate = new Date(`1970-01-01T${previousTime}Z`); // Utiliser une date fixe pour la comparaison
+
+  const timeDifference = (currentDate.getTime() - previousDate.getTime()) / 1000 / 60; // Différence en minutes
+  return timeDifference >= 5; // Afficher si plus de 5 minutes se sont écoulées
+};
+
+// Fonction pour formater l'heure
+const formatTime = (time: string): string => {
+  // Ici, nous supposons que le format est déjà correct (HH:mm:ss)
+  return time; // Retourner l'heure directement
+};
 </script>
 
 <style scoped>
