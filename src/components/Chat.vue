@@ -109,8 +109,17 @@
                 <!-- Actions sur le(s) message(s) -->
                 <div
                   v-if="message.isMe || !message.isMe"
-                  class="absolute top-0 right-0 hidden group-hover:flex gap-1 bg-white rounded-full shadow-lg p-1"
+                  class="absolute top-0 right-0 hidden group-hover:flex gap-1"
                 >
+                  <!-- bouton d'édition de message pour moi -->
+                  <button
+                    v-if="message.isMe"
+                    @click="startEdit(message)"
+                    class="p-1 hover:bg-gray-100"
+                    title="Modifier le message"
+                  >
+                    <font-awesome-icon icon="edit" class="w-4 h-4 text-white-500" />
+                  </button>
                   <!-- Bouton de suppression de message pour moi -->
                   <button
                     v-if="message.isMe"
@@ -120,6 +129,16 @@
                   >
                     <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
                   </button>
+                </div>
+                <!-- Zone d'édition du message -->
+                <div v-if="editingMessage && editingMessage.id === message.id">
+                  <input
+                    v-model="editContent"
+                    @keyup.enter="confirmEdit(message.id)"
+                    class="border rounded p-1"
+                    placeholder="Modifier votre message..."
+                  />
+                  <button @click="cancelEdit" class="text-red-500">Annuler</button>
                 </div>
               </div>
 
@@ -369,7 +388,6 @@ const receiveMessage = (
   const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
   storedMessages.push(newMessage);
   localStorage.setItem("messages", JSON.stringify(storedMessages));
-
   emitUnreadCount();
   nextTick(() => {
     scrollToBottom();
@@ -626,8 +644,6 @@ const getUnreadCount = computed(() => {
   console.log("Nombre de messages non lus : ", unreadCount);
   return unreadCount;
 });
-
-//  {id: '1733413105108', text: 'ça va aussi', time: '16:38:25', isMe: true, userId: 'hll'}
 
 const isChatVisible = ref(false);
 

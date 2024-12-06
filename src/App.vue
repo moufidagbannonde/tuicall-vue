@@ -8,67 +8,64 @@
         >
           Call Application
         </h1>
-        <!-- Formulaire d'initialisation de l'appel -->
-        <div class="w-full max-w-lg transform transition-all duration-500 ease-out">
+        <!-- Conteneur pour le formulaire et l'interface d'appel -->
+        <div class="flex flex-col lg:flex-row w-full gap-8">
+          <!-- Formulaire d'initialisation de l'appel -->
           <div
-            class="bg-white backdrop-blur-lg bg-opacity-90 p-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-shadow duration-300"
+            :class="[
+              'transition-all duration-500 ease-in-out flex justify-center',
+              isCallStarted ? 'lg:w-1/2 min-h-[35rem]' : 'lg:w-1/3 min-h-[35rem]',
+            ]"
           >
-            <CallInit :onInit="handleInit" />
-            <CallControls :onCall="call" v-if="!showGroupCallForm"></CallControls>
-            <!-- Conteneur d'appel de groupe -->
-            <div class="mt-10 space-y-4">
-              <button
-                v-if="!showGroupCallForm"
-                @click="showGroupCallForm = true"
-                class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 px-6 rounded-xl hover:from-blue-700 hover:to-indigo-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+            <div class="w-full max-w-lg transform transition-all duration-500 ease-out">
+              <div
+                class="bg-white backdrop-blur-lg bg-opacity-90 p-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-shadow duration-300"
               >
-                Start Group Call
-              </button>
-            </div>
-            <!-- Formulaire d'appel de groupe -->
-            <div v-if="showGroupCallForm" class="mt-8 animate-fade-in-up">
-              <input
-                v-model="calleeUserIDs"
-                type="text"
-                placeholder="Entrer les autres identifiants séparés par des virgules"
-                class="w-full px-5 py-4 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 text-gray-700 placeholder-gray-400 bg-white bg-opacity-90 backdrop-blur-sm"
-              />
-              <div class="flex flex-col space-y-3 mt-6">
-                <!-- bouton de démarrage de l'appel de groupe -->
-                <button
-                  @click="handleStartGroupCall"
-                  class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  Start Group Call
-                </button>
-                <!--bouton d'annulation de l'appel de groupe-->
-                <button
-                  @click="cancelGroupCall"
-                  class="bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold py-4 rounded-xl hover:from-gray-600 hover:to-gray-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  Cancel
-                </button>
+                <CallInit :onInit="handleInit" />
+                <CallControls :onCall="call" v-if="!showGroupCallForm"></CallControls>
+                <!-- Conteneur d'appel de groupe -->
+                <div class="mt-10 space-y-4">
+                  <button
+                    v-if="!showGroupCallForm"
+                    @click="showGroupCallForm = true"
+                    class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 px-6 rounded-xl hover:from-blue-700 hover:to-indigo-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+                  >
+                    Start Group Call
+                  </button>
+                </div>
+                <!-- Formulaire d'appel de groupe -->
+                <div v-if="showGroupCallForm" class="mt-8 animate-fade-in-up">
+                  <input
+                    v-model="calleeUserIDs"
+                    type="text"
+                    placeholder="Entrer les autres identifiants séparés par des virgules"
+                    class="w-full px-5 py-4 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-300 text-gray-700 placeholder-gray-400 bg-white bg-opacity-90 backdrop-blur-sm"
+                  />
+                  <div class="flex flex-col space-y-3 mt-6">
+                    <!-- bouton de démarrage de l'appel de groupe -->
+                    <button
+                      @click="handleStartGroupCall"
+                      class="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold py-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl"
+                    >
+                      Start Group Call
+                    </button>
+                    <!-- bouton d'annulation de l'appel de groupe -->
+                    <button
+                      @click="cancelGroupCall"
+                      class="bg-gradient-to-r from-gray-500 to-gray-600 text-white font-bold py-4 rounded-xl hover:from-gray-600 hover:to-gray-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <!--  modal de confirmation d'appel audio  -->
-        <ConfirmModal
-          :is-open="showNoCameraModal"
-          title="Caméra non détectée"
-          message="Aucune caméra n'a été détectée. Voulez-vous passer en appel audio ?"
-          confirm-text="Passer en audio"
-          cancel-text="Annuler"
-          @confirm="handleNoCameraConfirm"
-          @cancel="handleNoCameraCancel"
-        />
-        <!-- Interface d'appel et chat -->
-        <div
-          class="w-full flex flex-col lg:flex-row gap-8 mt-8 relative"
-          v-if="isCallStarted || isCalleeInitialized"
-        >
           <!-- Interface d'appel -->
-          <div class="flex-1">
+          <div
+            class="flex-1 transition-all duration-500 ease-in-out min-h-[35rem]"
+            v-if="isCallStarted || isCalleeInitialized"
+          >
             <TUICallKit
               class="w-full bg-white bg-opacity-95 rounded-2xl shadow-2xl transition-all duration-500 ease-in-out transform hover:scale-[1.02] h-80 md:h-[28rem] lg:h-[35rem] xl:h-[48rem] backdrop-blur-lg border border-white border-opacity-20"
               id="screen-share"
@@ -146,6 +143,16 @@
             />
           </div>
         </div>
+        <!--  modal de confirmation d'appel audio  -->
+        <ConfirmModal
+          :is-open="showNoCameraModal"
+          title="Caméra non détectée"
+          message="Aucune caméra n'a été détectée. Voulez-vous passer en appel audio ?"
+          confirm-text="Passer en audio"
+          cancel-text="Annuler"
+          @confirm="handleNoCameraConfirm"
+          @cancel="handleNoCameraCancel"
+        />
         <!-- conteneur affichant les flux distants -->
         <div class="flex justify-center w-full">
           <div
