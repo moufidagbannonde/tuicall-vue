@@ -13,6 +13,9 @@
       >
         {{ props.callActive ? "Appel en cours" : "Appel déconnecté" }}
       </div>
+      <span v-if="getUnreadCount > 0" class="ml-2 text-red-500 font-bold">
+        ({{ getUnreadCount }}) Messages non lus
+      </span>
 
       <!-- Zone des messages -->
       <div
@@ -22,13 +25,22 @@
         <div
           v-for="(message, index) in messages"
           :key="message.id"
+          @click="markAsRead(message.id)"
         >
           <!-- Affichage de l'heure de la discussion -->
-          <div v-if="shouldShowTime(index)" class="text-center text-gray-500 text-xs my-2">
-            {{ formatTime(message.time) }} 
+          <div
+            v-if="shouldShowTime(index)"
+            class="text-center text-gray-500 text-xs my-2"
+          >
+            {{ formatTime(message.time) }}
           </div>
 
-          <div :class="['message flex items-start mb-3', message.isMe ? 'justify-end' : 'justify-start']">
+          <div
+            :class="[
+              'message flex items-start mb-3',
+              message.isMe ? 'justify-end' : 'justify-start',
+            ]"
+          >
             <div class="relative max-w-[70%] group">
               <!-- Affichage du nom de l'utilisateur -->
               <div
@@ -69,24 +81,22 @@
               </div>
 
               <!-- Message principal -->
-              <div
-                class="p-4 rounded-lg my-2 transition-all duration-200 relative shadow-md group"
-                :class="[
-                  message.isMe
-                    ? 'bg-blue-500 text-white rounded-br-lg'
-                    : 'bg-gray-200 text-gray-900 rounded-bl-lg',
-                ]"
-              >
+              <div>
                 <!-- Contenu du message -->
                 <p
-                  class="m-0 text-sm break-words pr-10"
-                  v-if="editingMessage?.id !== message.id"
+                  :class="[
+                    'p-3 rounded-2xl text-sm max-w-md break-words shadow-lg',
+                    message.isMe
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-400 text-white self-end'
+                      : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-200 self-start',
+                    message.isRead ? '' : 'border border-yellow-500',
+                  ]"
                 >
                   {{ message.text }}
                 </p>
 
                 <!-- Heure -->
-                <span v-if="index === 0 || messages[index - 1].time !== message.time"                class="absolute text-xs font-semibold opacity-70"
+                <!-- <span v-if="index === 0 || messages[index - 1].time !== message.time"                class="absolute text-xs font-semibold opacity-70"
                   :class="[
                     message.isMe
                       ? 'bottom-1 right-2 text-white'
@@ -94,7 +104,7 @@
                   ]"
                 >
                   {{ message.time }}
-                </span>
+                </span> -->
 
                 <!-- Actions sur le(s) message(s) -->
                 <div
@@ -114,12 +124,12 @@
               </div>
 
               <!-- Zone de réponse -->
-              <div
+              <!-- <div
                 v-if="replyingTo?.id === message.id"
                 class="mt-3 bg-white rounded-lg p-3 shadow-md"
               >
                 <div class="flex items-center space-x-2">
-                  <!-- Icône représentant le profil -->
+                  Icône représentant le profil 
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     fill="currentColor"
@@ -131,7 +141,7 @@
                     />
                   </svg>
 
-                  <!-- Nom de l'utilisateur qui répond -->
+                   Nom de l'utilisateur qui répond
                   <span>{{ getUserId(message) }}</span>
                 </div>
 
@@ -155,7 +165,7 @@
                     Répondre
                   </button>
                 </div>
-              </div>
+              </div> -->
             </div>
           </div>
         </div>
@@ -210,7 +220,6 @@
 <script lang="ts" setup>
 // import des fonctions de vue
 import { ref, nextTick, onMounted, onBeforeUnmount, computed } from "vue";
-import { useToast } from "vue-toastification";
 import { io } from "socket.io-client";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { library } from "@fortawesome/fontawesome-svg-core";
@@ -221,8 +230,9 @@ import {
   faReply,
 } from "@fortawesome/free-solid-svg-icons";
 import ConfirmDelete from "./ConfirmDelete.vue";
-import * as ChatComponent from "../utils/ChatComponent";
+import * as ChatComponent from "../utils/ChatComponent.ts";
 import CustomNotification from "./CustomNotification.vue";
+import { Message } from "@tencentcloud/chat";
 const props = defineProps<{
   callActive: boolean;
 }>();
@@ -235,12 +245,13 @@ library.add(faPaperPlane, faEdit, faTrash, faReply);
 // Émettre des événements vers le composant parent
 const emit = defineEmits<{
   (e: "message-sent", message: string): void;
-  (e: "confirm"): void; // Ajout de l'événement confirm
-  (e: "cancel"): void; // Ajout de l'événement cancel
+  (e: "confirm"): void;
+  (e: "cancel"): void;
+  (e: "unread-count-changed", unreadCount: number): void;
 }>();
 
 // variables pour les messages
-const messages = ref<Message[]>([]);
+const messages = ref<ChatComponent.Message[]>([]);
 const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 
@@ -248,13 +259,13 @@ const messagesContainer = ref<HTMLElement | null>(null);
 const socket = ref<any>(null);
 
 //variables pour l'édition et la réponse des/aux messages
-const editingMessage = ref<Message | null>(null);
+const editingMessage = ref<ChatComponent.Message | null>(null);
 const editContent = ref("");
-const replyingTo = ref<Message | null>(null);
+const replyingTo = ref<ChatComponent.Message | null>(null);
 const replyContent = ref("");
 
 // Fonction pour récupérer le nom de l'utilisateur à partir de sessionStorage
-const getUserId = (message: Message) => {
+const getUserId = (message: ChatComponent.Message) => {
   console.log(" paramètre de la méthode getUserId : ", message);
 
   return message.userId;
@@ -270,8 +281,8 @@ const getReplyingToUserId = (messageId: string) => {
 const connectSocket = () => {
   socket.value = io("http://localhost:8080"); // URL du serveur
 
-  socket.value.on("message", (data: { text: string; userId: string }) => {
-    receiveMessage(data.text, undefined, data.userId);
+  socket.value.on("message", (data) => {
+    receiveMessage(data.text, undefined, data.userId, data.conversationId);
   });
 
   // Nouveaux écouteurs socket
@@ -284,6 +295,7 @@ const connectSocket = () => {
 
   socket.value.on("messageDeleted", (messageId: string) => {
     console.log("Message supprimé : ", messageId);
+    // Mettre à jour la liste des messages affichés
     messages.value = messages.value.filter((m) => m.id !== messageId);
   });
 
@@ -295,6 +307,12 @@ const connectSocket = () => {
   );
 };
 
+import { v4 as uuidv4 } from "uuid";
+import axios from "axios";
+
+const conversationId = ref("");
+conversationId.value = uuidv4();
+
 // envoi du message
 const userID = sessionStorage.getItem("userId");
 
@@ -304,40 +322,60 @@ const sendMessage = () => {
     return;
   }
   if (newMessage.value.trim()) {
-    const lastMessage = messages.value[messages.value.length - 1];
-    const newMsg: Message = {
+    const newMsg = {
       id: Date.now().toString(),
       text: newMessage.value,
       time: new Date().toLocaleTimeString(),
       isMe: true,
-      userId:
-        lastMessage && lastMessage.isMe && lastMessage.userId
-          ? lastMessage.userId
-          : userID
-          ? userID
-          : "",
+      userId: userID,
+      conversationId: conversationId.value, // Utiliser l'UUID de la conversation
+      isRead: true,
     };
     messages.value.push(newMsg);
-    socket.value.emit("message", { text: newMessage.value, userId: newMsg.userId });
+    socket.value.emit("message", {
+      text: newMessage.value,
+      userId: userID,
+      conversationId: conversationId.value, // Utiliser conversationId.value ici
+    });
     emit("message-sent", newMessage.value);
+    markAllAsRead();
     newMessage.value = "";
     nextTick(() => {
       scrollToBottom();
     });
-    localStorage.setItem("messages", JSON.stringify(messages.value));
-    showNotification("Message envoyé avec succès", "success");
   }
 };
 
+const fetchMessages = async () => {
+  try {
+    const response = await axios.get(
+      `http://localhost:8080/api/messages/${conversationId.value}` // Utiliser conversationId.value
+    );
+    messages.value = response.data; // Mettez à jour les messages avec les données récupérées
+  } catch (error) {
+    console.error("Erreur lors de la récupération des messages :", error);
+  }
+};
+// Appeler fetchMessages lors du montage du composant
+onMounted(() => {
+  fetchMessages();
+});
+
 // Réception des messages externes (d'autres participants)
-const receiveMessage = (text: string, replyTo?: string, userId?: string) => {
-  const newMessage: Message = {
+const receiveMessage = (
+  text: string,
+  replyTo?: string,
+  userId?: string,
+  isRead?: boolean
+) => {
+  const newMessage: ChatComponent.Message = {
     id: Date.now().toString(),
     text,
     time: new Date().toLocaleTimeString(),
     isMe: false,
     replyTo,
     userId: userId ? userId : "",
+    isRead: false,
   };
 
   messages.value.push(newMessage);
@@ -347,13 +385,14 @@ const receiveMessage = (text: string, replyTo?: string, userId?: string) => {
   storedMessages.push(newMessage);
   localStorage.setItem("messages", JSON.stringify(storedMessages));
 
+  emitUnreadCount();
   nextTick(() => {
     scrollToBottom();
   });
 };
 
 // début d'édition du message
-const startEdit = (message: Message) => {
+const startEdit = (message: ChatComponent.Message) => {
   editingMessage.value = message;
   editContent.value = message.text;
 };
@@ -393,12 +432,23 @@ const deleteMessage = (messageId: string, forEveryone: boolean = false) => {
 
 const handleDelete = () => {
   console.log("Suppression du message : ", messageToDelete.value);
+
+  // Récupérer le message à partir de la liste des messages
+  const messageToDeleteData = messages.value.find((m) => m.id === messageToDelete.value);
+
+  if (!messageToDeleteData) {
+    console.log("Message non trouvé.");
+    return;
+  }
+
+  const { text, userId } = messageToDeleteData; // Récupérer le texte et l'ID de l'utilisateur
+
   // Récupérer les messages du local storage
   const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
 
   // Filtrer les messages pour exclure celui à supprimer
   const updatedMessages = storedMessages.filter(
-    (m: Message) => m.id !== messageToDelete.value
+    (m: ChatComponent.Message) => m.id !== messageToDelete.value
   );
 
   // Mettre à jour le local storage avec la nouvelle liste
@@ -409,11 +459,16 @@ const handleDelete = () => {
     socket.value?.emit("deleteMessageForEveryone", messageToDelete.value);
     showNotification("Message supprimé pour tous", "success");
   } else {
-    socket.value?.emit("deleteMessage", messageToDelete.value); // Suppression pour soi
-    showNotification("Message supprimé ", "success");
+    // Émettre l'événement de suppression avec le texte et l'ID de l'utilisateur
+    console.log("text et userId à supprimer : ", text, "userId , ", userId);
+    socket.value?.emit("deleteMessage", { text, userId });
+    showNotification("Message supprimé", "success");
   }
 
-  messages.value = messages.value.filter((m) => m.id !== messageToDelete.value);
+  // Mettre à jour la liste des messages affichés
+  messages.value = messages.value.filter(
+    (m: ChatComponent.Message) => m.id !== messageToDelete.value
+  );
   messageToDelete.value = null;
   isModalVisible.value = false;
   // toast.success("Message supprimé");
@@ -436,13 +491,14 @@ const confirmReply = (messageId: string) => {
   }
 
   // Ajouter le message localement
-  const newMsg: Message = {
+  const newMsg: ChatComponent.Message = {
     id: Date.now().toString(),
     text: replyContent.value,
     time: new Date().toLocaleTimeString(),
     isMe: true,
     replyTo: messageId,
     userId: replyingUserId.value,
+    isRead: false,
   };
   messages.value.push(newMsg);
 
@@ -497,46 +553,29 @@ const scrollToBottom = () => {
   }
 };
 
-const contextMenuVisible = ref(false);
-const selectedMessage = ref<Message | null>(null);
-
-// Fonction pour afficher le menu contextuel
-const showContextMenu = (event: MouseEvent, message: Message) => {
-  event.preventDefault(); // Empêche le menu contextuel par défaut
-  contextMenuVisible.value = true;
-  selectedMessage.value = message;
-
-  //Positionner le menu contextuel
-  // const contextMenu = document.querySelector(".context-menu");
-  // if (contextMenu) {
-  //   contextMenu.style.top = `${event.clientY}px`;
-  //   contextMenu.style.left = `${event.clientX}px`;
-  // }
-};
-
-// Masquer le menu contextuel lorsque l'utilisateur clique ailleurs
-const hideContextMenu = () => {
-  contextMenuVisible.value = false;
-  selectedMessage.value = null;
+const markAllAsRead = () => {
+  messages.value.forEach((message) => {
+    message.isRead = true; // Marquer chaque message comme lu
+  });
 };
 
 // Écouter les clics pour masquer le menu contextuel
 onMounted(() => {
   connectSocket();
-  window.addEventListener("click", hideContextMenu);
+  openChat(); // Marquer tous les messages comme lus lors de l'ouverture de la discussion
+  markAllAsRead();
 });
 
 onBeforeUnmount(() => {
   if (socket.value) {
     socket.value.disconnect();
   }
-  window.removeEventListener("click", hideContextMenu);
 });
 
 // Exposer la méthode receiveMessage pour le composant parent
-// defineExpose({
-//   receiveMessage,
-// });
+defineExpose({
+  receiveMessage,
+});
 
 const notificationVisible = ref(false);
 const notificationMessage = ref("");
@@ -550,7 +589,7 @@ const showNotification = (message: string, type = "info") => {
 
   setTimeout(() => {
     notificationVisible.value = false; // Masquer après 3 secondes
-  }, 3000); // Afficher pendant 3 secondes
+  }, 5000); // Afficher pendant 3 secondes
 };
 
 // Fonction pour déterminer si l'heure doit être affichée
@@ -580,6 +619,43 @@ const formatTime = (time: string): string => {
   // Ici, nous supposons que le format est déjà correct (HH:mm:ss)
   return time; // Retourner l'heure directement
 };
+
+// Fonction pour marquer un message comme lu
+const markAsRead = (messageId: string) => {
+  const message = messages.value.find((msg) => msg.id === messageId);
+  if (message) {
+    message.isRead = true; // Marquer le message comme lu
+  }
+};
+
+const openChat = () => {
+  // Marquer tous les messages comme lus
+  messages.value.forEach((message) => {
+    message.isRead = true;
+  });
+};
+
+const getUnreadCount = computed(() => {
+  // Compter les messages non lus
+  const unreadCount = messages.value.filter((message) => !message.isRead).length;
+  console.log("Nombre de messages non lus : ", unreadCount);
+  return unreadCount;
+});
+
+//  {id: '1733413105108', text: 'ça va aussi', time: '16:38:25', isMe: true, userId: 'hll'}
+
+const isChatVisible = ref(false);
+
+// Méthode pour ouvrir/fermer la messagerie
+const toggleChat = () => {
+  isChatVisible.value = !isChatVisible.value;
+};
+
+// Émettre un événement pour notifier le nombre de messages non lus
+const emitUnreadCount = () => {
+  const unreadCount = getUnreadCount.value; // Obtenez le nombre de messages non lus
+  emit("unread-count-changed", unreadCount); // Émettez l'événement
+};
 </script>
 
 <style scoped>
@@ -594,5 +670,8 @@ const formatTime = (time: string): string => {
 }
 .justify-start {
   justify-content: flex-start;
+}
+.border-yellow-500 {
+  border-color: #fbbf24; /* Couleur pour les messages non lus */
 }
 </style>

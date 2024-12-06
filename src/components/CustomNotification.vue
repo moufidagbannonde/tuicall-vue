@@ -7,7 +7,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 
-const props = defineProps({
+ const props = defineProps({
   message: String,
   type: {
     type: String,
