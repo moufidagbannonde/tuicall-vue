@@ -306,11 +306,12 @@ const connectSocket = () => {
 
   // Nouveaux écouteurs socket
   socket.value.on("messageEdited", (updatedMessage) => {
-    console.log("message modifié : ", updatedMessage);
+    console.log("updatedMessage : ", updatedMessage);
     // Vérifiez si le message existe déjà
     const messageIndex = messages.value.findIndex(
       (m) => m.text === updatedMessage.text && m.userId === updatedMessage.userId
     );
+    console.log("messageIndex : ", messageIndex);
     if (messageIndex !== -1) {
       // Remplacer l'ancien message par le message modifié
       messages.value[messageIndex].text = updatedMessage.newContent; // Mettre à jour le message complet
