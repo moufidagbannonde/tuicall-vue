@@ -89,7 +89,7 @@
                     message.isMe
                       ? 'bg-gradient-to-r from-blue-500 to-blue-400 text-white self-end'
                       : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-200 self-start',
-                    message.isRead ? '' : 'border border-yellow-500',
+                    message.isRead ? '' : 'border border-green-700 blink', // Classe blink pour l'animation
                   ]"
                 >
                   {{ message.text }}
@@ -404,18 +404,24 @@ const startEdit = (message: ChatComponent.Message) => {
 const confirmEdit = (messageId: string) => {
   if (!editContent.value.trim()) return;
 
+  // Récupérer le message à modifier
+  const messageToEdit = messages.value.find((m) => m.id === messageId);
+  if (!messageToEdit) return;
+
+  // Émettre l'événement de modification du message via le socket
   socket.value?.emit("editMessage", {
-    messageId,
-    newContent: editContent.value,
+    text: messageToEdit.text, // Texte original
+    userId: messageToEdit.userId, // ID de l'utilisateur
+    newContent: editContent.value, // Nouveau contenu du message
   });
 
+  // Mettre à jour localement
   const messageIndex = messages.value.findIndex((m) => m.id === messageId);
   if (messageIndex !== -1) {
-    messages.value[messageIndex].text = editContent.value;
+    messages.value[messageIndex].text = editContent.value; // Mettre à jour localement
   }
 
   cancelEdit();
-  //   toast.success("Message modifié");
 };
 
 // annulation de l'édition
@@ -676,5 +682,23 @@ watch(getUnreadCount, (newCount) => {
 }
 .border-yellow-500 {
   border-color: #fbbf24; /* Couleur pour les messages non lus */
+}
+@keyframes blink {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05); /* Augmente légèrement la taille */
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.blink {
+  animation: blink 1s infinite;
 }
 </style>

@@ -67,7 +67,7 @@
             v-if="isCallStarted || isCalleeInitialized"
           >
             <TUICallKit
-              class="w-full bg-white bg-opacity-95 rounded-2xl shadow-2xl transition-all duration-500 ease-in-out transform hover:scale-[1.02] h-80 md:h-[28rem] lg:h-[35rem] xl:h-[48rem] backdrop-blur-lg border border-white border-opacity-20"
+              class="w-full h-full bg-white bg-opacity-95 rounded-2xl shadow-2xl transition-all duration-500 ease-in-out transform hover:scale-[1.02] h-80 backdrop-blur-lg border border-white border-opacity-20"
               id="screen-share"
             />
             <!-- Contrôles des boutons de partage d'écran -->
