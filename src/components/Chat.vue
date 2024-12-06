@@ -219,7 +219,7 @@
 
 <script lang="ts" setup>
 // import des fonctions de vue
-import { ref, nextTick, onMounted, onBeforeUnmount, computed } from "vue";
+import { ref, nextTick, onMounted, onBeforeUnmount, computed, watch } from "vue";
 import { io } from "socket.io-client";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { library } from "@fortawesome/fontawesome-svg-core";
@@ -335,7 +335,7 @@ const sendMessage = () => {
     socket.value.emit("message", {
       text: newMessage.value,
       userId: userID,
-      conversationId: conversationId.value, // Utiliser conversationId.value ici
+      conversationId: "votre_conversation_id",
     });
     emit("message-sent", newMessage.value);
     markAllAsRead();
@@ -345,21 +345,6 @@ const sendMessage = () => {
     });
   }
 };
-
-const fetchMessages = async () => {
-  try {
-    const response = await axios.get(
-      `http://localhost:8080/api/messages/${conversationId.value}` // Utiliser conversationId.value
-    );
-    messages.value = response.data; // Mettez à jour les messages avec les données récupérées
-  } catch (error) {
-    console.error("Erreur lors de la récupération des messages :", error);
-  }
-};
-// Appeler fetchMessages lors du montage du composant
-onMounted(() => {
-  fetchMessages();
-});
 
 // Réception des messages externes (d'autres participants)
 const receiveMessage = (
@@ -650,12 +635,14 @@ const isChatVisible = ref(false);
 const toggleChat = () => {
   isChatVisible.value = !isChatVisible.value;
 };
-
-// Émettre un événement pour notifier le nombre de messages non lus
 const emitUnreadCount = () => {
   const unreadCount = getUnreadCount.value; // Obtenez le nombre de messages non lus
   emit("unread-count-changed", unreadCount); // Émettez l'événement
 };
+// Émettre le nombre de messages non lus lorsque cela change
+watch(getUnreadCount, (newCount) => {
+  emit("unread-count-changed", newCount);
+});
 </script>
 
 <style scoped>

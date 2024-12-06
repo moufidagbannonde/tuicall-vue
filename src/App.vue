@@ -97,11 +97,18 @@
                 class="fixed right-0 top-1/2 transform -translate-y-1/2 z-50 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-l-lg shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-300"
                 :class="{ 'right-96': isChatOpen }"
               >
+                <!-- Badge pour le nombre de messages non lus -->
+                <span
+                  v-if="unreadCount > 0"
+                  class="ml-2 text-red-500 font-bold p-1 rounded"
+                >
+                  ({{ unreadCount }})
+                </span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  height="24px"
+                  height="30px"
                   viewBox="0 0 24 24"
-                  width="24px"
+                  width="30px"
                   fill="#ffffff"
                   v-if="!isChatOpen"
                 >
@@ -123,13 +130,6 @@
                   </svg>
                 </span>
               </button>
-              <!-- Badge pour le nombre de messages non lus -->
-              <span
-                v-if="getUnreadCount > 0"
-                class="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full px-1"
-              >
-                {{ getUnreadCount }}
-              </span>
             </div>
           </div>
           <!-- interface de chat -->
