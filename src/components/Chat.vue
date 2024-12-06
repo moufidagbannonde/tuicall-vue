@@ -305,10 +305,24 @@ const connectSocket = () => {
   });
 
   // Nouveaux écouteurs socket
-  socket.value.on("messageEdited", (data: { messageId: string; newContent: string }) => {
-    const messageIndex = messages.value.findIndex((m) => m.id === data.messageId);
+  socket.value.on("messageEdited", (updatedMessage) => {
+    console.log("message modifié : ", updatedMessage);
+    // Vérifiez si le message existe déjà
+    const messageIndex = messages.value.findIndex(
+      (m) => m.text === updatedMessage.text && m.userId === updatedMessage.userId
+    );
     if (messageIndex !== -1) {
-      messages.value[messageIndex].text = data.newContent;
+      // Remplacer l'ancien message par le message modifié
+      messages.value[messageIndex].text = updatedMessage.newContent; // Mettre à jour le message complet
+      // messages.value.push(updatedMessage);
+      console.log(
+        "Message mis à jour dans l'interface utilisateur :",
+        messages.value[messageIndex]
+      );
+    } else {
+      // Si le message n'existe pas, l'ajouter à la liste
+      // messages.value.push(updatedMessage);
+      console.log("Message ajouté à l'interface utilisateur :", updatedMessage);
     }
   });
 
