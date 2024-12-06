@@ -304,33 +304,33 @@ const connectSocket = () => {
     receiveMessage(data.text, undefined, data.userId, data.conversationId);
   });
 
-  // Nouveaux écouteurs socket
+  // Socket d'édition de message
   socket.value.on("messageEdited", (updatedMessage) => {
-    console.log("updatedMessage : ", updatedMessage);
+    // console.log("updatedMessage : ", updatedMessage);
     // Vérifiez si le message existe déjà
     const messageIndex = messages.value.findIndex(
       (m) => m.text === updatedMessage.text && m.userId === updatedMessage.userId
     );
-    console.log("messageIndex : ", messageIndex);
+    // console.log("messageIndex : ", messageIndex);
     if (messageIndex !== -1) {
       // Remplacer l'ancien message par le message modifié
       messages.value[messageIndex].text = updatedMessage.newContent; // Mettre à jour le message complet
       // messages.value.push(updatedMessage);
-      console.log(
-        "Message mis à jour dans l'interface utilisateur :",
-        messages.value[messageIndex]
-      );
+      // console.log(
+      //   "Message mis à jour dans l'interface utilisateur :",
+      //   messages.value[messageIndex]
+      // );
     } else {
       // Si le message n'existe pas, l'ajouter à la liste
       // messages.value.push(updatedMessage);
-      console.log("Message ajouté à l'interface utilisateur :", updatedMessage);
+      // console.log("Message ajouté à l'interface utilisateur :", updatedMessage);
     }
   });
 
-  socket.value.on("messageDeleted", (messageId: string) => {
-    console.log("Message supprimé : ", messageId);
-    // Mettre à jour la liste des messages affichés
-    messages.value = messages.value.filter((m) => m.id !== messageId);
+  socket.value.on("messageDeleted", (deletedMessageId) => {
+    console.log("Message supprimé : ", deletedMessageId);
+    // Mettre à jour la liste des messages affichés en filtrant par ID
+    messages.value = messages.value.filter((m) => m.id !== deletedMessageId);
   });
 
   socket.value.on(
