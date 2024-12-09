@@ -52,7 +52,6 @@
 
               <!-- Message principal -->
               <div>
-                <!-- Contenu du message -->
                 <p
                   :class="[
                     'p-3 rounded-2xl text-sm max-w-md break-words shadow-lg',
@@ -62,7 +61,16 @@
                     message.isRead ? '' : 'border border-green-700 blink',
                   ]"
                 >
-                  {{ message.text }}
+                  <!-- Partie "A répondu à ..." -->
+                  <!-- <span v-if="message.replyTo" class="block text-xs text-gray-500 mb-1">
+                    A répondu à :
+                    <strong>{{
+                      findReplyMessage(message.replyTo)?.text || "Message introuvable"
+                    }}</strong>
+                  </span> -->
+
+                  <!-- Texte principal -->
+                  <span class="block">{{ message.text }}</span>
                 </p>
 
                 <!-- Actions sur le(s) message(s) -->
@@ -115,7 +123,20 @@
                 v-if="replyingTo?.id === message.id"
                 class="mt-3 bg-white rounded-lg p-3 shadow-md"
               >
-                <div class="flex items-center space-x-2">
+                <!-- Indiquer que l'utilisateur a répondu à un message -->
+                <!-- <div class="text-gray-600 mb-2">
+                  <strong>A répondu à :</strong>
+                  {{
+                    findReplyMessage(replyingTo.replyTo)?.text || "Message introuvable"
+                  }}
+                </div> -->
+
+                <!-- Afficher le contenu de la réponse -->
+                <div class="text-gray-900">
+                  {{ replyContent }}
+                </div>
+
+                <div class="flex items-center space-x-2 mt-2">
                   <!-- Afficher le nom de l'utilisateur qui répond -->
                   <span>{{ getUserId(replyingTo) }}</span>
                 </div>
@@ -148,33 +169,35 @@
 
       <!-- Zone de saisie de message -->
       <div class="mt-4">
-        <div class="flex items-center gap-3">
-          <input
-            v-model="newMessage"
-            @keyup.enter="sendMessage"
-            class="flex-1 rounded-full px-5 py-3 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
-            type="text"
-            placeholder="Écrivez votre message..."
-          />
-          <button @click="sendMessage" class="p-3 text-blue">
-            <svg
-              data-v-8765cc6e
-              class="svg-inline--fa fa-paper-plane w-5 h-5"
-              aria-hidden="true"
-              focusable="false"
-              data-prefix="fas"
-              data-icon="paper-plane"
-              role="img"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 512 512"
-            >
-              <path
-                class
-                fill="#3B82F6"
-                d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480l0-83.6c0-4 1.5-7.8 4.2-10.8L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"
-              ></path>
-            </svg>
-          </button>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-3">
+            <input
+              v-model="newMessage"
+              @keyup.enter="sendMessage"
+              class="flex-1 rounded-full px-5 py-3 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
+              type="text"
+              placeholder="Écrivez votre message..."
+            />
+            <button @click="sendMessage" class="p-3 text-blue">
+              <svg
+                data-v-8765cc6e
+                class="svg-inline--fa fa-paper-plane w-5 h-5"
+                aria-hidden="true"
+                focusable="false"
+                data-prefix="fas"
+                data-icon="paper-plane"
+                role="img"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 512 512"
+              >
+                <path
+                  class
+                  fill="#3B82F6"
+                  d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480l0-83.6c0-4 1.5-7.8 4.2-10.8L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"
+                ></path>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -289,12 +312,20 @@ const connectSocket = () => {
     messages.value = messages.value.filter((m) => m.id !== deletedMessageId);
   });
 
-  socket.value.on(
-    "messageReplied",
-    (data: { replyTo: string; message: string; userId: string }) => {
-      receiveMessage(data.message, data.replyTo, data.userId);
-    }
-  );
+  socket.value.on("messageReplied", (data) => {
+    // Ajoutez le message à la liste des messages
+    const newMessage: ChatComponent.Message = {
+      id: Date.now().toString(),
+      text: data.message,
+      time: new Date().toLocaleTimeString(),
+      isMe: false,
+      replyTo: data.replyTo,
+      userId: data.userId,
+      isRead: false,
+    };
+
+    messages.value.push(newMessage);
+  });
 
   socket.value.on("messageDeleted", (messageId) => {
     messages.value = messages.value.filter((m) => m.id !== messageId);
@@ -461,20 +492,27 @@ const confirmReply = (messageId: string) => {
   // Ajouter le message localement
   const newMsg: ChatComponent.Message = {
     id: Date.now().toString(),
-    text: replyContent.value,
+    text: replyContent.value, // On garde le texte de la réponse séparé
     time: new Date().toLocaleTimeString(),
     isMe: true,
-    replyTo: messageId,
+    replyTo: messageId, // ID du message auquel on répond
     userId: replyingUserId.value,
     isRead: true,
   };
+
+  // Inclure le message d'origine dans le texte du message
+  const originalMessage = findReplyMessage(messageId);
+  if (originalMessage) {
+    newMsg.text = `A répondu à : ${originalMessage.text}\n${replyContent.value}`;
+  }
+
   messages.value.push(newMsg);
 
   // Envoi de la réponse via le socket
   socket.value?.emit("replyMessage", {
     replyTo: messageId,
-    userId: replyingUserId.value,
-    message: replyContent.value,
+    userId: userID,
+    message: newMsg.text, // Envoyer le texte modifié
   });
 
   cancelReply();
