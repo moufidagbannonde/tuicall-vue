@@ -42,42 +42,12 @@
             ]"
           >
             <div class="relative max-w-[70%] group">
-              <!-- Affichage du nom de l'utilisateur -->
+              <!-- Affichage du nom de l'utilisateur sans icône de profil -->
               <div
                 v-if="index === 0 || messages[index - 1].userId !== message.userId"
                 class="text-xs text-gray-600 mb-1 flex items-center space-x-2"
               >
-                <!-- Icône représentant le profil, affichée à gauche si le message n'est pas un message de nous -->
-                <svg
-                  v-if="!message.isMe"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  class="w-5 h-5"
-                >
-                  <path
-                    d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                  />
-                </svg>
-
-                <!-- Nom de l'utilisateur -->
                 <span>{{ getUserId(message) }}</span>
-
-                <!-- Icône représentant le profil, affichée à droite si le message vient des autres participants de l'appel -->
-                <svg
-                  v-if="message.isMe"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="currentColor"
-                  viewBox="0 0 24 24"
-                  class="w-5 h-5"
-                >
-                  <path
-                    d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                  />
-                </svg>
-                <!-- <span>
-                  {{ getUserId(findReplyMessage(message.id)?.userId || '') }}
-                </span> -->
               </div>
 
               <!-- Message principal -->
@@ -89,28 +59,26 @@
                     message.isMe
                       ? 'bg-gradient-to-r from-blue-500 to-blue-400 text-white self-end'
                       : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-200 self-start',
-                    message.isRead ? '' : 'border border-green-700 blink', // Classe blink pour l'animation
+                    message.isRead ? '' : 'border border-green-700 blink',
                   ]"
                 >
                   {{ message.text }}
                 </p>
-
-                <!-- Heure -->
-                <!-- <span v-if="index === 0 || messages[index - 1].time !== message.time"                class="absolute text-xs font-semibold opacity-70"
-                  :class="[
-                    message.isMe
-                      ? 'bottom-1 right-2 text-white'
-                      : 'bottom-1 right-2 text-gray-500',
-                  ]"
-                >
-                  {{ message.time }}
-                </span> -->
 
                 <!-- Actions sur le(s) message(s) -->
                 <div
                   v-if="message.isMe || !message.isMe"
                   class="absolute top-0 right-0 hidden group-hover:flex gap-1"
                 >
+                  <!-- Icône de réponse, affichée uniquement pour les messages des autres -->
+                  <button
+                    v-if="!message.isMe"
+                    @click.stop="startReply(message)"
+                    class="p-1 hover:bg-gray-100"
+                    title="Répondre"
+                  >
+                    <font-awesome-icon icon="reply" class="w-4 h-4 text-blue-500" />
+                  </button>
                   <!-- bouton d'édition de message pour moi -->
                   <button
                     v-if="message.isMe"
@@ -123,9 +91,9 @@
                   <!-- Bouton de suppression de message pour moi -->
                   <button
                     v-if="message.isMe"
-                    @click="deleteMessage(message.id, false)"
+                    @click="deleteMessage(message.id, true)"
                     class="p-1 hover:bg-gray-100 rounded-full"
-                    title="Supprimer pour moi"
+                    title="Supprimer pour tous"
                   >
                     <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
                   </button>
@@ -143,25 +111,13 @@
               </div>
 
               <!-- Zone de réponse -->
-              <!-- <div
+              <div
                 v-if="replyingTo?.id === message.id"
                 class="mt-3 bg-white rounded-lg p-3 shadow-md"
               >
                 <div class="flex items-center space-x-2">
-                  Icône représentant le profil 
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                    class="w-5 h-5"
-                  >
-                    <path
-                      d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                    />
-                  </svg>
-
-                   Nom de l'utilisateur qui répond
-                  <span>{{ getUserId(message) }}</span>
+                  <!-- Afficher le nom de l'utilisateur qui répond -->
+                  <span>{{ getUserId(replyingTo) }}</span>
                 </div>
 
                 <input
@@ -184,7 +140,7 @@
                     Répondre
                   </button>
                 </div>
-              </div> -->
+              </div>
             </div>
           </div>
         </div>
@@ -339,6 +295,14 @@ const connectSocket = () => {
       receiveMessage(data.message, data.replyTo, data.userId);
     }
   );
+
+  socket.value.on("messageDeleted", (messageId) => {
+    messages.value = messages.value.filter((m) => m.id !== messageId);
+  });
+
+  socket.value.on("deleteMessageForEveryOne", (messageId) => {
+    messages.value = messages.value.filter((m) => m.id !== messageId);
+  });
 };
 
 import { v4 as uuidv4 } from "uuid";
@@ -457,7 +421,6 @@ const deleteMessage = (messageId: string, forEveryone: boolean = false) => {
 const handleDelete = () => {
   console.log("Suppression du message : ", messageToDelete.value);
 
-  // Récupérer le message à partir de la liste des messages
   const messageToDeleteData = messages.value.find((m) => m.id === messageToDelete.value);
 
   if (!messageToDeleteData) {
@@ -465,29 +428,10 @@ const handleDelete = () => {
     return;
   }
 
-  const { text, userId } = messageToDeleteData; // Récupérer le texte et l'ID de l'utilisateur
-
-  // Récupérer les messages du local storage
-  const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
-
-  // Filtrer les messages pour exclure celui à supprimer
-  const updatedMessages = storedMessages.filter(
-    (m: ChatComponent.Message) => m.id !== messageToDelete.value
-  );
-
-  // Mettre à jour le local storage avec la nouvelle liste
-  localStorage.setItem("messages", JSON.stringify(updatedMessages));
+  const { text, userId } = messageToDeleteData;
 
   // Émettre l'événement de suppression selon l'option choisie
-  if (forEvery.value) {
-    socket.value?.emit("deleteMessageForEveryone", messageToDelete.value);
-    showNotification("Message supprimé pour tous", "success");
-  } else {
-    // Émettre l'événement de suppression avec le texte et l'ID de l'utilisateur
-    console.log("text et userId à supprimer : ", text, "userId , ", userId);
-    socket.value?.emit("deleteMessage", { text, userId });
-    showNotification("Message supprimé", "success");
-  }
+  socket.value?.emit("deleteMessage", { text, userId, forEveryOne: forEvery.value });
 
   // Mettre à jour la liste des messages affichés
   messages.value = messages.value.filter(
@@ -495,7 +439,6 @@ const handleDelete = () => {
   );
   messageToDelete.value = null;
   isModalVisible.value = false;
-  // toast.success("Message supprimé");
 };
 
 const replyingUserId = ref("");
@@ -504,6 +447,7 @@ const startReply = (message: Message) => {
   replyingTo.value = message;
   replyContent.value = "";
   replyingUserId.value = sessionStorage.getItem("userId") || "";
+  console.log("userId du message répondu : ", replyingUserId.value);
 };
 
 // confirmation de la réponse
@@ -522,20 +466,18 @@ const confirmReply = (messageId: string) => {
     isMe: true,
     replyTo: messageId,
     userId: replyingUserId.value,
-    isRead: false,
+    isRead: true,
   };
   messages.value.push(newMsg);
 
   // Envoi de la réponse via le socket
   socket.value?.emit("replyMessage", {
     replyTo: messageId,
-    userId: userID,
+    userId: replyingUserId.value,
     message: replyContent.value,
   });
 
   cancelReply();
-  //showNotification("Réponse envoyée", "success");
-
   nextTick(() => {
     scrollToBottom();
   });
@@ -603,8 +545,7 @@ defineExpose({
 
 const notificationVisible = ref(false);
 const notificationMessage = ref("");
-const notificationType = ref("info"); // info, success, error, etc.
-
+const notificationType = ref("info");
 // Fonction pour afficher la notification
 const showNotification = (message: string, type = "info") => {
   notificationMessage.value = message;
@@ -612,8 +553,8 @@ const showNotification = (message: string, type = "info") => {
   notificationVisible.value = true;
 
   setTimeout(() => {
-    notificationVisible.value = false; // Masquer après 3 secondes
-  }, 5000); // Afficher pendant 3 secondes
+    notificationVisible.value = false; // Masquer après 5 secondes
+  }, 5000); // Afficher pendant 5 secondes
 };
 
 // Fonction pour déterminer si l'heure doit être affichée
