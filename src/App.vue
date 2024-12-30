@@ -193,8 +193,8 @@ import CustomNotification from "./components/CustomNotification.vue";
 import { io } from "socket.io-client";
 
 // variables d'accès à l'API Tencent Cloud
-const SDKAppID = 20015336;
-const SDKSecretKey = "55ac0e3ef6475f6545bb089b0423017987d28a8900f00408590018618b01afea";
+const SDKAppID = 20016319;
+const SDKSecretKey = "97f6c34ef3a9bc2ab1ad4dde706cfe9bddadbd80cd4ed1b4f08dd089b6f5f1a0";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 const unreadCount = ref(0);

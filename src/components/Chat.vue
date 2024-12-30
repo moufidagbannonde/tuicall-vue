@@ -8,7 +8,8 @@
         class="rounded-xl p-3 text-center font-semibold text-sm mb-5"
         :class="{
           'bg-blue-100 text-blue-900 border border-blue-300': props.callActive,
-          'bg-orange-100 text-orange-900 border border-orange-300': !props.callActive,
+          'bg-orange-100 text-orange-900 border border-orange-300':
+            !props.callActive,
         }"
       >
         {{ props.callActive ? "Appel en cours" : "Appel déconnecté" }}
@@ -17,6 +18,13 @@
         ({{ getUnreadCount }}) Messages non lus
       </span>
 
+      <span @click="inviteUser">...</span>
+
+      <div v-if="inviteModal">
+        <input type="text" v-model="inviteeUsers">
+        <button>Inviter</button>
+        <button>Annuler</button>
+      </div>
       <!-- Zone des messages -->
       <div
         class="flex-1 overflow-y-auto p-5 my-5 bg-white rounded-2xl shadow-inner"
@@ -25,7 +33,6 @@
         <div
           v-for="(message, index) in messages"
           :key="message.id"
-          @click="markAsRead(message.id)"
         >
           <!-- Affichage de l'heure de la discussion -->
           <div
@@ -44,7 +51,9 @@
             <div class="relative max-w-[70%] group">
               <!-- Affichage du nom de l'utilisateur sans icône de profil -->
               <div
-                v-if="index === 0 || messages[index - 1].userId !== message.userId"
+                v-if="
+                  index === 0 || messages[index - 1].userId !== message.userId
+                "
                 class="text-xs text-gray-600 mb-1 flex items-center space-x-2"
               >
                 <span>{{ getUserId(message) }}</span>
@@ -52,7 +61,7 @@
 
               <!-- Message principal -->
               <div>
-                <p
+                <div
                   :class="[
                     'p-3 rounded-2xl text-sm max-w-md break-words shadow-lg',
                     message.isMe
@@ -62,16 +71,19 @@
                   ]"
                 >
                   <!-- Partie "A répondu à ..." -->
-                  <!-- <span v-if="message.replyTo" class="block text-xs text-gray-500 mb-1">
-                    A répondu à :
-                    <strong>{{
-                      findReplyMessage(message.replyTo)?.text || "Message introuvable"
+                  <div
+                    v-if="message.replyTo"
+                    class="bg-gray-50 p-2 rounded-lg mb-2 text-sm"
+                  >
+                    <div class="text-gray-500 text-xs mb-1">En réponse à :</div>
+                    <strong class="text-gray-700">{{
+                      findReplyMessage(message.replyTo)?.text ||
+                      "Message non trouvé"
                     }}</strong>
-                  </span> -->
-
+                  </div>
                   <!-- Texte principal -->
                   <span class="block">{{ message.text }}</span>
-                </p>
+                </div>
 
                 <!-- Actions sur le(s) message(s) -->
                 <div
@@ -85,7 +97,10 @@
                     class="p-1 hover:bg-gray-100"
                     title="Répondre"
                   >
-                    <font-awesome-icon icon="reply" class="w-4 h-4 text-blue-500" />
+                    <font-awesome-icon
+                      icon="reply"
+                      class="w-4 h-4 text-blue-500"
+                    />
                   </button>
                   <!-- bouton d'édition de message pour moi -->
                   <button
@@ -94,7 +109,10 @@
                     class="p-1 hover:bg-gray-100"
                     title="Modifier le message"
                   >
-                    <font-awesome-icon icon="edit" class="w-4 h-4 text-white-500" />
+                    <font-awesome-icon
+                      icon="edit"
+                      class="w-4 h-4 text-white-500"
+                    />
                   </button>
                   <!-- Bouton de suppression de message pour moi -->
                   <button
@@ -103,7 +121,10 @@
                     class="p-1 hover:bg-gray-100 rounded-full"
                     title="Supprimer pour tous"
                   >
-                    <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
+                    <font-awesome-icon
+                      icon="trash"
+                      class="w-4 h-4 text-red-500"
+                    />
                   </button>
                 </div>
                 <!-- Zone d'édition du message -->
@@ -114,7 +135,9 @@
                     class="border rounded p-1"
                     placeholder="Modifier votre message..."
                   />
-                  <button @click="cancelEdit" class="text-red-500">Annuler</button>
+                  <button @click="cancelEdit" class="text-red-500">
+                    Annuler
+                  </button>
                 </div>
               </div>
 
@@ -217,7 +240,14 @@
 
 <script lang="ts" setup>
 // import des fonctions de vue
-import { ref, nextTick, onMounted, onBeforeUnmount, computed, watch } from "vue";
+import {
+  ref,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  computed,
+  watch,
+} from "vue";
 import { io } from "socket.io-client";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { library } from "@fortawesome/fontawesome-svg-core";
@@ -227,15 +257,20 @@ import {
   faTrash,
   faReply,
 } from "@fortawesome/free-solid-svg-icons";
-import ConfirmDelete from "./ConfirmDelete.vue";
-import * as ChatComponent from "../utils/ChatComponent.ts";
-import CustomNotification from "./CustomNotification.vue";
-import { Message } from "@tencentcloud/chat";
+import * as ConfirmDelete from "./ConfirmDelete.vue";
+import * as ChatComponent from "../utils/ChatComponent";
+// import "../utils/ChatComponent";
+import * as CustomNotification from "./CustomNotification.vue";
+import { v4 as uuidv4 } from "uuid";
+import axios from "axios";
+import { TUICallKitServer } from "@tencentcloud/call-uikit-vue";
+
+
 const props = defineProps<{
   callActive: boolean;
 }>();
 const isModalVisible = ref(false);
-
+const inviteModal = ref(false);
 // icônes
 library.add(faPaperPlane, faEdit, faTrash, faReply);
 // notification(s)
@@ -253,6 +288,7 @@ const messages = ref<ChatComponent.Message[]>([]);
 const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 
+const inviteeUsers = ref([]);
 // variable pour la connexion au socket
 const socket = ref<any>(null);
 
@@ -264,55 +300,45 @@ const replyContent = ref("");
 
 // Fonction pour récupérer le nom de l'utilisateur à partir de sessionStorage
 const getUserId = (message: ChatComponent.Message) => {
-  console.log(" paramètre de la méthode getUserId : ", message);
-
   return message.userId;
 };
 
 const getReplyingToUserId = (messageId: string) => {
-  const replyingToMessage = messages.value.find((m) => m.userId === messageId);
-  console.log("userId du message répondu : ", messageId);
-  console.log("Message répondu : ", replyingToMessage);
-  // return replyingToMessage?.userId;
+  const replyingToMessage = messages.value.find(
+    (m: ChatComponent.Message) => m.userId === messageId
+  );
 };
 // connexion au socket pour la communication en temps réel
 const connectSocket = () => {
   socket.value = io("http://localhost:8080"); // URL du serveur
 
-  socket.value.on("message", (data) => {
+  socket.value.on("message", (data: ChatComponent.Message) => {
     receiveMessage(data.text, undefined, data.userId, data.conversationId);
   });
 
   // Socket d'édition de message
-  socket.value.on("messageEdited", (updatedMessage) => {
-    // console.log("updatedMessage : ", updatedMessage);
+  socket.value.on("messageEdited", (updatedMessage: ChatComponent.Message) => {
     // Vérifiez si le message existe déjà
     const messageIndex = messages.value.findIndex(
-      (m) => m.text === updatedMessage.text && m.userId === updatedMessage.userId
+      (m: ChatComponent.Message) =>
+        m.text === updatedMessage.text && m.userId === updatedMessage.userId
     );
-    // console.log("messageIndex : ", messageIndex);
     if (messageIndex !== -1) {
       // Remplacer l'ancien message par le message modifié
       messages.value[messageIndex].text = updatedMessage.newContent; // Mettre à jour le message complet
-      // messages.value.push(updatedMessage);
-      // console.log(
-      //   "Message mis à jour dans l'interface utilisateur :",
-      //   messages.value[messageIndex]
-      // );
     } else {
-      // Si le message n'existe pas, l'ajouter à la liste
-      // messages.value.push(updatedMessage);
-      // console.log("Message ajouté à l'interface utilisateur :", updatedMessage);
+      // on ne fait rien si le message n'existe pas
     }
   });
 
-  socket.value.on("messageDeleted", (deletedMessageId) => {
-    console.log("Message supprimé : ", deletedMessageId);
+  socket.value.on("messageDeleted", (deletedMessageId: string) => {
     // Mettre à jour la liste des messages affichés en filtrant par ID
-    messages.value = messages.value.filter((m) => m.id !== deletedMessageId);
+    messages.value = messages.value.filter(
+      (m: ChatComponent.Message) => m.id !== deletedMessageId
+    );
   });
 
-  socket.value.on("messageReplied", (data) => {
+  socket.value.on("messageReplied", (data: ChatComponent.Message) => {
     // Ajoutez le message à la liste des messages
     const newMessage: ChatComponent.Message = {
       id: Date.now().toString(),
@@ -327,27 +353,36 @@ const connectSocket = () => {
     messages.value.push(newMessage);
   });
 
-  socket.value.on("messageDeleted", (messageId) => {
-    messages.value = messages.value.filter((m) => m.id !== messageId);
+  socket.value.on("messageDeleted", (messageId: string) => {
+    messages.value = messages.value.filter(
+      (m: ChatComponent.Message) => m.id !== messageId
+    );
   });
 
-  socket.value.on("deleteMessageForEveryOne", (messageId) => {
-    messages.value = messages.value.filter((m) => m.id !== messageId);
+  socket.value.on("deleteMessageForEveryOne", (messageId: string) => {
+    messages.value = messages.value.filter(
+      (m: ChatComponent.Message) => m.id !== messageId
+    );
   });
 };
 
-import { v4 as uuidv4 } from "uuid";
-import axios from "axios";
 
 const conversationId = ref("");
 conversationId.value = uuidv4();
 
+const inviteUser = async () => {
+  inviteModal.value = true;
+}
 // envoi du message
 const userID = sessionStorage.getItem("userId");
 
+// todo: envoyer e
 const sendMessage = () => {
   if (!props.callActive) {
-    showNotification("Impossible d'envoyer un message : appel non actif", "error");
+    showNotification(
+      "Impossible d'envoyer un message : appel non actif",
+      "error"
+    );
     return;
   }
   if (newMessage.value.trim()) {
@@ -357,14 +392,19 @@ const sendMessage = () => {
       time: new Date().toLocaleTimeString(),
       isMe: true,
       userId: userID,
-      conversationId: conversationId.value, // Utiliser l'UUID de la conversation
       isRead: true,
     };
     messages.value.push(newMsg);
+
+    // Mettre à jour le localStorage avec le nouveau message
+    const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
+    storedMessages.push(newMsg); // Ajouter le message sans filtrer par userId
+    localStorage.setItem("messages", JSON.stringify(storedMessages));
+
     socket.value.emit("message", {
       text: newMessage.value,
+      receiverId: "",
       userId: userID,
-      conversationId: "votre_conversation_id",
     });
     emit("message-sent", newMessage.value);
     markAllAsRead();
@@ -396,7 +436,7 @@ const receiveMessage = (
 
   // Mettre à jour le localStorage avec le nouveau message
   const storedMessages = JSON.parse(localStorage.getItem("messages") || "[]");
-  storedMessages.push(newMessage);
+  storedMessages.push(newMessage); // Ajouter le message sans filtrer par userId
   localStorage.setItem("messages", JSON.stringify(storedMessages));
   emitUnreadCount();
   nextTick(() => {
@@ -415,7 +455,9 @@ const confirmEdit = (messageId: string) => {
   if (!editContent.value.trim()) return;
 
   // Récupérer le message à modifier
-  const messageToEdit = messages.value.find((m) => m.id === messageId);
+  const messageToEdit = messages.value.find(
+    (m: ChatComponent.Message) => m.id === messageId
+  );
   if (!messageToEdit) return;
 
   // Émettre l'événement de modification du message via le socket
@@ -426,7 +468,9 @@ const confirmEdit = (messageId: string) => {
   });
 
   // Mettre à jour localement
-  const messageIndex = messages.value.findIndex((m) => m.id === messageId);
+  const messageIndex = messages.value.findIndex(
+    (m: ChatComponent.Message) => m.id === messageId
+  );
   if (messageIndex !== -1) {
     messages.value[messageIndex].text = editContent.value; // Mettre à jour localement
   }
@@ -450,19 +494,22 @@ const deleteMessage = (messageId: string, forEveryone: boolean = false) => {
 };
 
 const handleDelete = () => {
-  console.log("Suppression du message : ", messageToDelete.value);
-
-  const messageToDeleteData = messages.value.find((m) => m.id === messageToDelete.value);
+  const messageToDeleteData = messages.value.find(
+    (m: ChatComponent.Message) => m.id === messageToDelete.value
+  );
 
   if (!messageToDeleteData) {
-    console.log("Message non trouvé.");
     return;
   }
 
   const { text, userId } = messageToDeleteData;
 
   // Émettre l'événement de suppression selon l'option choisie
-  socket.value?.emit("deleteMessage", { text, userId, forEveryOne: forEvery.value });
+  socket.value?.emit("deleteMessage", {
+    text,
+    userId,
+    forEveryOne: forEvery.value,
+  });
 
   // Mettre à jour la liste des messages affichés
   messages.value = messages.value.filter(
@@ -478,11 +525,11 @@ const startReply = (message: Message) => {
   replyingTo.value = message;
   replyContent.value = "";
   replyingUserId.value = sessionStorage.getItem("userId") || "";
-  console.log("userId du message répondu : ", replyingUserId.value);
 };
 
 // confirmation de la réponse
 const confirmReply = (messageId: string) => {
+  console.log("confirmation message", messageId);
   if (!replyContent.value.trim()) return;
   if (!props.callActive) {
     showNotification("Impossible de répondre : appel non actif", "error");
@@ -491,6 +538,7 @@ const confirmReply = (messageId: string) => {
 
   // Ajouter le message localement
   const newMsg: ChatComponent.Message = {
+    // TODO : utiliser l'objet id renvoyé par Mongo au lieu du Date.now
     id: Date.now().toString(),
     text: replyContent.value, // On garde le texte de la réponse séparé
     time: new Date().toLocaleTimeString(),
@@ -499,29 +547,21 @@ const confirmReply = (messageId: string) => {
     userId: replyingUserId.value,
     isRead: true,
   };
-
-  // Inclure le message d'origine dans le texte du message
-  const originalMessage = findReplyMessage(messageId);
-  if (originalMessage) {
-    newMsg.text = `A répondu à : ${originalMessage.text}\n${replyContent.value}`;
-  }
-
-  messages.value.push(newMsg);
-
+  // const newText = `En réponse à : ${findReplyMessage(messageId)?.text} ${newMsg.text}`; // Ajouter le texte de la réponse au message
   // Envoi de la réponse via le socket
   socket.value?.emit("replyMessage", {
     replyTo: messageId,
     userId: userID,
-    message: newMsg.text, // Envoyer le texte modifié
+    message: newMsg.text 
   });
 
+  messages.value.push(newMsg);
   cancelReply();
   nextTick(() => {
     scrollToBottom();
   });
 };
 
-// ... autres variables ...
 const showDialogVisible = ref(false);
 const dialogMessage = ref("");
 
@@ -548,7 +588,11 @@ const cancelReply = () => {
 };
 
 const findReplyMessage = (messageId: string) => {
-  return messages.value.find((m) => m.id === messageId);
+  console.log("messageId", messageId);
+  console.log("messages", messages.value);
+  return messages.value.find(
+    (m: ChatComponent.Message) => m.id <= messageId + 2 || m.id >= messageId + 2
+  );
 };
 
 const scrollToBottom = () => {
@@ -558,7 +602,7 @@ const scrollToBottom = () => {
 };
 
 const markAllAsRead = () => {
-  messages.value.forEach((message) => {
+  messages.value.forEach((message: ChatComponent.Message) => {
     message.isRead = true; // Marquer chaque message comme lu
   });
 };
@@ -566,7 +610,7 @@ const markAllAsRead = () => {
 // Écouter les clics pour masquer le menu contextuel
 onMounted(() => {
   connectSocket();
-  openChat(); // Marquer tous les messages comme lus lors de l'ouverture de la discussion
+  openChat();
   markAllAsRead();
 });
 
@@ -605,7 +649,6 @@ const shouldShowTime = (index: number): boolean => {
 
   // Vérifiez si les heures sont valides
   if (!currentTime || !previousTime) {
-    console.error("Invalid time format for message:", currentTime);
     return false; // Ne pas afficher l'heure si elle est invalide
   }
 
@@ -613,7 +656,8 @@ const shouldShowTime = (index: number): boolean => {
   const currentDate = new Date(`1970-01-01T${currentTime}Z`); // Utiliser une date fixe pour la comparaison
   const previousDate = new Date(`1970-01-01T${previousTime}Z`); // Utiliser une date fixe pour la comparaison
 
-  const timeDifference = (currentDate.getTime() - previousDate.getTime()) / 1000 / 60; // Différence en minutes
+  const timeDifference =
+    (currentDate.getTime() - previousDate.getTime()) / 1000 / 60; // Différence en minutes
   return timeDifference >= 5; // Afficher si plus de 5 minutes se sont écoulées
 };
 
@@ -625,7 +669,9 @@ const formatTime = (time: string): string => {
 
 // Fonction pour marquer un message comme lu
 const markAsRead = (messageId: string) => {
-  const message = messages.value.find((msg) => msg.id === messageId);
+  const message = messages.value.find(
+    (msg: ChatComponent.Message) => msg.id === messageId
+  );
   if (message) {
     message.isRead = true; // Marquer le message comme lu
   }
@@ -633,15 +679,16 @@ const markAsRead = (messageId: string) => {
 
 const openChat = () => {
   // Marquer tous les messages comme lus
-  messages.value.forEach((message) => {
+  messages.value.forEach((message: ChatComponent.Message) => {
     message.isRead = true;
   });
 };
 
 const getUnreadCount = computed(() => {
   // Compter les messages non lus
-  const unreadCount = messages.value.filter((message) => !message.isRead).length;
-  console.log("Nombre de messages non lus : ", unreadCount);
+  const unreadCount = messages.value.filter(
+    (message: ChatComponent.Message) => !message.isRead
+  ).length;
   return unreadCount;
 });
 
