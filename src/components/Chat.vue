@@ -18,13 +18,8 @@
         ({{ getUnreadCount }}) Messages non lus
       </span>
 
-      <span @click="inviteUser">...</span>
 
-      <div v-if="inviteModal">
-        <input type="text" v-model="inviteeUsers">
-        <button>Inviter</button>
-        <button>Annuler</button>
-      </div>
+      
       <!-- Zone des messages -->
       <div
         class="flex-1 overflow-y-auto p-5 my-5 bg-white rounded-2xl shadow-inner"
@@ -260,20 +255,19 @@ import {
 import * as ConfirmDelete from "./ConfirmDelete.vue";
 import * as ChatComponent from "../utils/ChatComponent";
 // import "../utils/ChatComponent";
-import * as CustomNotification from "./CustomNotification.vue";
-import { v4 as uuidv4 } from "uuid";
-import axios from "axios";
-import { TUICallKitServer } from "@tencentcloud/call-uikit-vue";
+// import * as CustomNotification from "./CustomNotification.vue";
+
 
 
 const props = defineProps<{
   callActive: boolean;
 }>();
 const isModalVisible = ref(false);
-const inviteModal = ref(false);
 // icônes
 library.add(faPaperPlane, faEdit, faTrash, faReply);
 // notification(s)
+
+
 
 // Émettre des événements vers le composant parent
 const emit = defineEmits<{
@@ -288,7 +282,6 @@ const messages = ref<ChatComponent.Message[]>([]);
 const newMessage = ref("");
 const messagesContainer = ref<HTMLElement | null>(null);
 
-const inviteeUsers = ref([]);
 // variable pour la connexion au socket
 const socket = ref<any>(null);
 
@@ -313,7 +306,7 @@ const connectSocket = () => {
   socket.value = io("http://localhost:8080"); // URL du serveur
 
   socket.value.on("message", (data: ChatComponent.Message) => {
-    receiveMessage(data.text, undefined, data.userId, data.conversationId);
+    receiveMessage(data.text, undefined, data.userId);
   });
 
   // Socket d'édition de message
@@ -367,12 +360,7 @@ const connectSocket = () => {
 };
 
 
-const conversationId = ref("");
-conversationId.value = uuidv4();
 
-const inviteUser = async () => {
-  inviteModal.value = true;
-}
 // envoi du message
 const userID = sessionStorage.getItem("userId");
 

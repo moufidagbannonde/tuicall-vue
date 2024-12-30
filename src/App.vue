@@ -14,15 +14,22 @@
           <div
             :class="[
               'transition-all duration-500 ease-in-out flex justify-center',
-              isCallStarted ? 'lg:w-1/2 min-h-[35rem]' : 'lg:w-1/3 min-h-[35rem]',
+              isCallStarted
+                ? 'lg:w-1/2 min-h-[35rem]'
+                : 'lg:w-1/3 min-h-[35rem]',
             ]"
           >
-            <div class="w-full max-w-lg transform transition-all duration-500 ease-out">
+            <div
+              class="w-full max-w-lg transform transition-all duration-500 ease-out"
+            >
               <div
                 class="bg-white backdrop-blur-lg bg-opacity-90 p-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-shadow duration-300"
               >
                 <CallInit :onInit="handleInit" />
-                <CallControls :onCall="call" v-if="!showGroupCallForm"></CallControls>
+                <CallControls
+                  :onCall="call"
+                  v-if="!showGroupCallForm"
+                ></CallControls>
                 <!-- Conteneur d'appel de groupe -->
                 <div class="mt-10 space-y-4">
                   <button
@@ -70,6 +77,46 @@
               class="w-full h-full bg-white bg-opacity-95 rounded-2xl shadow-2xl transition-all duration-500 ease-in-out transform hover:scale-[1.02] h-80 backdrop-blur-lg border border-white border-opacity-20"
               id="screen-share"
             />
+            <!-- Ajout du bouton d'invitation -->
+            <div class="mt-4 flex justify-center space-x-4">
+              <button
+                @click="inviteParticipant"
+                class="px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl"
+              >
+                Inviter un participant
+              </button>
+            </div>
+
+            <!-- Ajouter le modal d'invitation -->
+            <div
+              v-if="showInviteModal"
+              class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            >
+              <div class="bg-white rounded-xl p-6 w-96">
+                <h3 class="text-xl font-bold mb-4">Inviter un participant</h3>
+                <input
+                  v-model="inviteeUserID"
+                  type="text"
+                  placeholder="ID de l'utilisateur à inviter"
+                  class="w-full px-4 py-2 rounded-lg border mb-4"
+                />
+                <div class="flex justify-end space-x-3">
+                  <button
+                    @click="closeInviteModal"
+                    class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    @click="sendInvitation"
+                    class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    Inviter
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- Contrôles des boutons de partage d'écran -->
             <div class="screen-share-controls flex space-x-4 mt-4">
               <!-- Bouton de partage d'écran -->
@@ -83,7 +130,9 @@
               <!-- bouton d'arrêt de partage d'écran -->
               <button
                 @click="stopScreenCapture"
-                :disabled="!isScreenSharing || currentScreenSharer !== currentUserID"
+                :disabled="
+                  !isScreenSharing || currentScreenSharer !== currentUserID
+                "
                 class="px-8 py-4 rounded-xl font-bold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 transform hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
               >
                 Arrêter le partage
@@ -178,7 +227,11 @@ import { onMounted, onUnmounted, ref, watch } from "vue";
 import * as GenerateTestUserSig from "./debug/GenerateTestUserSig-es";
 // notification(s)
 // TUI
-import { TUICallKit, TUICallKitServer, TUICallType } from "@tencentcloud/call-uikit-vue";
+import {
+  TUICallKit,
+  TUICallKitServer,
+  TUICallType,
+} from "@tencentcloud/call-uikit-vue";
 import Chat from "@tencentcloud/chat";
 import TRTC from "trtc-js-sdk";
 
@@ -194,7 +247,8 @@ import { io } from "socket.io-client";
 
 // variables d'accès à l'API Tencent Cloud
 const SDKAppID = 20016319;
-const SDKSecretKey = "97f6c34ef3a9bc2ab1ad4dde706cfe9bddadbd80cd4ed1b4f08dd089b6f5f1a0";
+const SDKSecretKey =
+  "97f6c34ef3a9bc2ab1ad4dde706cfe9bddadbd80cd4ed1b4f08dd089b6f5f1a0";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 const unreadCount = ref(0);
@@ -245,15 +299,177 @@ const isChatOpen = ref(false);
 const isModalVisible = ref(false);
 const messageToDelete = ref(null);
 
+const showInviteModal = ref(false);
+const inviteeUserID = ref("");
+
+const socket = ref(
+  io("http://localhost:8080", {
+    withCredentials: true,
+    transports: ["websocket", "polling"],
+  })
+);
+
+// Fonction pour ouvrir le modal d'invitation
+function inviteParticipant() {
+  showInviteModal.value = true;
+}
+
+// Fonction pour fermer le modal d'invitation
+function closeInviteModal() {
+  showInviteModal.value = false;
+  inviteeUserID.value = "";
+}
+
+const currentGroupID = ref(null);
+// Fonction pour envoyer l'invitation
+// async function sendInvitation() {
+//   if (!inviteeUserID.value) {
+//     showNotification("Veuillez entrer un ID d'utilisateur", "error");
+//     return;
+//   }
+
+//   try {
+//     // Envoyer l'invitation via le socket
+//     socket.value.emit("invite-to-call", {
+//       inviteeID: inviteeUserID.value,
+//       roomID: currentGroupID.value || createGroupID(),
+//       callerID: currentUserID.value,
+//     });
+//     console.log("infos d'invitation", {
+//       inviteeID: inviteeUserID.value,
+//       roomID: currentGroupID.value || createGroupID(),
+//       callerID: currentUserID.value,
+//     })
+
+//     showNotification("Invitation envoyée avec succès", "success");
+//     closeInviteModal();
+//   } catch (error) {
+//     showNotification("Erreur lors de l'envoi de l'invitation", "error");
+//     console.error("Erreur d'invitation:", error);
+//   }
+// }
+
+async function sendInvitation() {
+  if (!inviteeUserID.value) {
+    showNotification("Veuillez entrer un ID d'utilisateur", "error");
+    return;
+  }
+
+  try {
+    // Si nous n'avons pas de groupID, on en crée un
+    if (!currentGroupID.value) {
+      // Mettre à jour calleeUserIDs pour createGroupID
+      calleeUserIDs.value = inviteeUserID.value;
+      await createGroupID();
+      currentGroupID.value = groupID.value;
+    }
+
+    // Préparer les données d'invitation
+    const invitationData = {
+      inviteeID: inviteeUserID.value,
+      roomID: currentGroupID.value,
+      callerID: currentUserID.value,
+    };
+
+    console.log("infos d'invitation", invitationData);
+
+    // Envoyer l'invitation via le socket
+    socket.value.emit("invite-to-call", invitationData);
+
+    showNotification("Invitation envoyée avec succès", "success");
+    closeInviteModal();
+  } catch (error) {
+    showNotification("Erreur lors de l'envoi de l'invitation", "error");
+    console.error("Erreur d'invitation:", error);
+  }
+}
+// Gestionnaire pour les invitations reçues
+// socket.value.on("call-invitation", async (data) => {
+//   const { callerID, roomID } = data;
+
+//   // Afficher une notification avec confirmation
+//   const confirmed = window.confirm(
+//     `${callerID} vous invite à rejoindre un appel. Acceptez-vous ?`
+//   );
+
+//   if (confirmed) {
+//     try {
+//       // Stocker l'ID du groupe
+//       currentGroupID.value = roomID;
+//       groupID.value = roomID;
+
+//       // Initialiser l'appel
+//       await init(callerID);
+
+//       // Rejoindre l'appel en groupe
+//       await startGroupCall(TUICallType.VIDEO_CALL);
+
+//       showNotification("Vous avez rejoint l'appel", "success");
+//     } catch (error) {
+//       console.error("Erreur lors de la connexion à l'appel:", error);
+//       showNotification("Erreur lors de la connexion à l'appel", "error");
+//     }
+//   } else {
+//     showNotification("Invitation refusée", "info");
+//   }
+// });
+
+socket.value.on("call-invitation", async (data) => {
+  const { callerID, roomID } = data;
+  
+  const accepted = window.confirm("Vous avez reçu une invitation à rejoindre un appel. Acceptez-vous ?");
+  
+  if (accepted) {
+    try {
+
+      // TODO : récupérer les identifiants des participants de l'appel et ajouter celui de l'invité et démarrer l'appel de groupe avec ceux-ci , quand ceci aurait marché , il faut ajouter la continuation avec l'appel en cours et non démarrer l'appel en cours
+      // Initialiser TUICallKit
+      await init(callerID);
+      // 
+      await startGroupCall(TUICallType.AUDIO_CALL);
+      // initialiser l'appel
+      await handleStartGroupCall();
+      
+      // Définir le groupID
+      groupID.value = roomID;
+      
+      // apprêter l'interface d'appel avant de rejoindre l'appel
+      isCalleeInitialized.value = true;
+      isCallStarted.value = true;
+      
+      // Rejoindre l'appel en groupe
+      await startGroupCall(TUICallType.VIDEO_CALL);
+      
+      showNotification("Vous avez rejoint l'appel", "success");
+    } catch (error) {
+      console.error("Erreur lors de la connexion à l'appel:", error);
+      showNotification("Erreur lors de la connexion à l'appel", "error");
+    }
+  } else {
+    showNotification("Invitation refusée", "info");
+  }
+});
 /**
  *  cycles de vie
  */
+
+onMounted(() => {
+  socket.value.on("connect", () => {
+    console.log("Connecté au serveur Socket.IO");
+    // Envoyer l'ID de l'utilisateur au serveur
+    if (currentUserID.value) {
+      socket.value.emit("user-connected", currentUserID.value);
+    }
+  });
+
+  // Écouter les erreurs d'invitation
+  socket.value.on("invitation-error", (data) => {
+    showNotification(data.message, "error");
+  });
+});
 // chargement du composant
 onMounted(() => {
   initTRTC(); // initialisation de TRTC
-});
-onMounted(() => {
-  console.log("window's history", window.History);
 });
 
 // démontage du composant
@@ -376,7 +592,10 @@ async function startScreenShare() {
     currentScreenSharer.value = currentUserID.value;
     isScreenSharing.value = true;
 
-    console.log("Partage démarré avec succès, stream ID:", screenStream.value.getId());
+    console.log(
+      "Partage démarré avec succès, stream ID:",
+      screenStream.value.getId()
+    );
     showNotification("Partage d'écran démarré avec succès!", "success");
   } catch (error) {
     console.error("Erreur lors du partage d'écran : ", error);
@@ -398,12 +617,18 @@ watch(currentScreenSharer, (newVal) => {
 });
 
 watch(isCalleeInitialized, (newValue) => {
-  console.log("La valeur de isCalleeInitialized a changé et est maintenant : ", newValue);
+  console.log(
+    "La valeur de isCalleeInitialized a changé et est maintenant : ",
+    newValue
+  );
 });
 
 // watch pour surveiller les changements de l'appel
 watch(isCallStarted, (newValue) => {
-  console.log("La valeur de isCallStarted a changé et est maintenant : ", newValue);
+  console.log(
+    "La valeur de isCallStarted a changé et est maintenant : ",
+    newValue
+  );
   if (newValue) {
     isCallActive.value = true;
   }
@@ -506,6 +731,12 @@ const init = async (callerUserID) => {
   });
 
   try {
+    currentUserID.value = callerUserID;
+    // Envoyer l'ID au serveur si la connexion est déjà établie
+    if (socket.value.connected) {
+      console.log("Envoi de l'ID utilisateur au serveur:", currentUserID.value);
+      socket.value.emit("user-connected", currentUserID.value);
+    }
     await TUICallKitServer.init({
       userID: callerUserID,
       userSig,
@@ -609,7 +840,8 @@ const call = async (calleeUserID, callType) => {
       timeout: 30,
       offlinePushInfo: {
         title: "Appel entrant",
-        description: callType === TUICallType.VIDEO_CALL ? "Appel vidéo" : "Appel audio",
+        description:
+          callType === TUICallType.VIDEO_CALL ? "Appel vidéo" : "Appel audio",
       },
     });
     isCalleeInitialized.value = true;
@@ -716,6 +948,8 @@ const createGroupID = async () => {
     memberList,
   });
   groupID.value = res.data.group.groupID;
+  console.log("groupID fonction createGroupID", groupID.value);
+  return groupID.value;
 };
 
 /**
@@ -763,13 +997,6 @@ const cancelGroupCall = () => {
   showGroupCallForm.value = false;
   calleeUserIDs.value = "";
 };
-
-const socket = ref(
-  io("http://localhost:8080", {
-    withCredentials: true,
-    transports: ["websocket", "polling"],
-  })
-);
 
 onMounted(() => {
   socket.value.on("connect", () => {
@@ -819,7 +1046,9 @@ const handleDelete = () => {
     socket.value?.emit("deleteMessage", messageToDelete.value); // Émettre l'événement de suppression
 
     // Suppression
-    messages.value = messages.value.filter((m) => m.id !== messageToDelete.value);
+    messages.value = messages.value.filter(
+      (m) => m.id !== messageToDelete.value
+    );
 
     messageToDelete.value = null; // Réinitialiser l'ID du message
     isModalVisible.value = false; // Fermer la modal
