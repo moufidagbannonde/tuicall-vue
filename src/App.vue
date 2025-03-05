@@ -246,9 +246,9 @@ import CustomNotification from "./components/CustomNotification.vue";
 import { io } from "socket.io-client";
 
 // variables d'accès à l'API Tencent Cloud
-const SDKAppID = 20016319;
+const SDKAppID = 20020076;
 const SDKSecretKey =
-  "97f6c34ef3a9bc2ab1ad4dde706cfe9bddadbd80cd4ed1b4f08dd089b6f5f1a0";
+  "d17ccfbb0caa428bb99b0d7deb2a63b7ea6e8d25534677eb741839916c5802cb";
 // const SDKAppID = 0;
 // const SDKSecretKey = "";
 const unreadCount = ref(0);
@@ -844,6 +844,16 @@ const call = async (calleeUserID, callType) => {
           callType === TUICallType.VIDEO_CALL ? "Appel vidéo" : "Appel audio",
       },
     });
+
+    // const userIdList = calleeUserID.split(" ");
+    // groupID.value = await createGroupID();
+    // console.log("groupID: ", groupID.value);
+    // await TUICallKitServer.groupCall({
+    //   userIDList: userIdList,
+    //   groupID: groupID.value,
+    //   type: callType
+    // });
+
     isCalleeInitialized.value = true;
     isCallStarted.value = true;
     showNotification("Appel en cours...", "info");

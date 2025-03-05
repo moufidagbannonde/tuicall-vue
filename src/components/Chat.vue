@@ -1,17 +1,12 @@
 <template>
   <div class="container mx-auto px-4">
-    <div
-      class="max-w-3xl mx-auto bg-gray-100 rounded-3xl shadow-xl p-6 h-[85vh] flex flex-col"
-    >
+    <div class="max-w-3xl mx-auto bg-gray-100 rounded-3xl shadow-xl p-6 h-[85vh] flex flex-col">
       <!-- Indicateur de statut d'appel -->
-      <div
-        class="rounded-xl p-3 text-center font-semibold text-sm mb-5"
-        :class="{
-          'bg-blue-100 text-blue-900 border border-blue-300': props.callActive,
-          'bg-orange-100 text-orange-900 border border-orange-300':
-            !props.callActive,
-        }"
-      >
+      <div class="rounded-xl p-3 text-center font-semibold text-sm mb-5" :class="{
+        'bg-blue-100 text-blue-900 border border-blue-300': props.callActive,
+        'bg-orange-100 text-orange-900 border border-orange-300':
+          !props.callActive,
+      }">
         {{ props.callActive ? "Appel en cours" : "Appel déconnecté" }}
       </div>
       <span v-if="getUnreadCount > 0" class="ml-2 text-red-500 font-bold">
@@ -19,57 +14,38 @@
       </span>
 
 
-      
+
       <!-- Zone des messages -->
-      <div
-        class="flex-1 overflow-y-auto p-5 my-5 bg-white rounded-2xl shadow-inner"
-        ref="messagesContainer"
-      >
-        <div
-          v-for="(message, index) in messages"
-          :key="message.id"
-        >
+      <div class="flex-1 overflow-y-auto p-5 my-5 bg-white rounded-2xl shadow-inner" ref="messagesContainer">
+        <div v-for="(message, index) in messages" :key="message.id">
           <!-- Affichage de l'heure de la discussion -->
-          <div
-            v-if="shouldShowTime(index)"
-            class="text-center text-gray-500 text-xs my-2"
-          >
+          <div v-if="shouldShowTime(index)" class="text-center text-gray-500 text-xs my-2">
             {{ formatTime(message.time) }}
           </div>
 
-          <div
-            :class="[
-              'message flex items-start mb-3',
-              message.isMe ? 'justify-end' : 'justify-start',
-            ]"
-          >
+          <div :class="[
+            'message flex items-start mb-3',
+            message.isMe ? 'justify-end' : 'justify-start',
+          ]">
             <div class="relative max-w-[70%] group">
               <!-- Affichage du nom de l'utilisateur sans icône de profil -->
-              <div
-                v-if="
-                  index === 0 || messages[index - 1].userId !== message.userId
-                "
-                class="text-xs text-gray-600 mb-1 flex items-center space-x-2"
-              >
+              <div v-if="
+                index === 0 || messages[index - 1].userId !== message.userId
+              " class="text-xs text-gray-600 mb-1 flex items-center space-x-2">
                 <span>{{ getUserId(message) }}</span>
               </div>
 
               <!-- Message principal -->
               <div>
-                <div
-                  :class="[
-                    'p-3 rounded-2xl text-sm max-w-md break-words shadow-lg',
-                    message.isMe
-                      ? 'bg-gradient-to-r from-blue-500 to-blue-400 text-white self-end'
-                      : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-200 self-start',
-                    message.isRead ? '' : 'border border-green-700 blink',
-                  ]"
-                >
+                <div :class="[
+                  'p-3 rounded-2xl text-sm max-w-md break-words shadow-lg',
+                  message.isMe
+                    ? 'bg-gradient-to-r from-blue-500 to-blue-400 text-white self-end'
+                    : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-200 self-start',
+                  message.isRead ? '' : 'border border-green-700 blink',
+                ]">
                   <!-- Partie "A répondu à ..." -->
-                  <div
-                    v-if="message.replyTo"
-                    class="bg-gray-50 p-2 rounded-lg mb-2 text-sm"
-                  >
+                  <div v-if="message.replyTo" class="bg-gray-50 p-2 rounded-lg mb-2 text-sm">
                     <div class="text-gray-500 text-xs mb-1">En réponse à :</div>
                     <strong class="text-gray-700">{{
                       findReplyMessage(message.replyTo)?.text ||
@@ -81,55 +57,27 @@
                 </div>
 
                 <!-- Actions sur le(s) message(s) -->
-                <div
-                  v-if="message.isMe || !message.isMe"
-                  class="absolute top-0 right-0 hidden group-hover:flex gap-1"
-                >
+                <div v-if="message.isMe || !message.isMe" class="absolute top-0 right-0 hidden group-hover:flex gap-1">
                   <!-- Icône de réponse, affichée uniquement pour les messages des autres -->
-                  <button
-                    v-if="!message.isMe"
-                    @click.stop="startReply(message)"
-                    class="p-1 hover:bg-gray-100"
-                    title="Répondre"
-                  >
-                    <font-awesome-icon
-                      icon="reply"
-                      class="w-4 h-4 text-blue-500"
-                    />
+                  <button v-if="!message.isMe" @click.stop="startReply(message)" class="p-1 hover:bg-gray-100"
+                    title="Répondre">
+                    <font-awesome-icon icon="reply" class="w-4 h-4 text-blue-500" />
                   </button>
                   <!-- bouton d'édition de message pour moi -->
-                  <button
-                    v-if="message.isMe"
-                    @click="startEdit(message)"
-                    class="p-1 hover:bg-gray-100"
-                    title="Modifier le message"
-                  >
-                    <font-awesome-icon
-                      icon="edit"
-                      class="w-4 h-4 text-white-500"
-                    />
+                  <button v-if="message.isMe" @click="startEdit(message)" class="p-1 hover:bg-gray-100"
+                    title="Modifier le message">
+                    <font-awesome-icon icon="edit" class="w-4 h-4 text-white-500" />
                   </button>
                   <!-- Bouton de suppression de message pour moi -->
-                  <button
-                    v-if="message.isMe"
-                    @click="deleteMessage(message.id, true)"
-                    class="p-1 hover:bg-gray-100 rounded-full"
-                    title="Supprimer pour tous"
-                  >
-                    <font-awesome-icon
-                      icon="trash"
-                      class="w-4 h-4 text-red-500"
-                    />
+                  <button v-if="message.isMe" @click="deleteMessage(message.id, true)"
+                    class="p-1 hover:bg-gray-100 rounded-full" title="Supprimer pour tous">
+                    <font-awesome-icon icon="trash" class="w-4 h-4 text-red-500" />
                   </button>
                 </div>
                 <!-- Zone d'édition du message -->
                 <div v-if="editingMessage && editingMessage.id === message.id">
-                  <input
-                    v-model="editContent"
-                    @keyup.enter="confirmEdit(message.id)"
-                    class="border rounded p-1"
-                    placeholder="Modifier votre message..."
-                  />
+                  <input v-model="editContent" @keyup.enter="confirmEdit(message.id)" class="border rounded p-1"
+                    placeholder="Modifier votre message..." />
                   <button @click="cancelEdit" class="text-red-500">
                     Annuler
                   </button>
@@ -137,10 +85,7 @@
               </div>
 
               <!-- Zone de réponse -->
-              <div
-                v-if="replyingTo?.id === message.id"
-                class="mt-3 bg-white rounded-lg p-3 shadow-md"
-              >
+              <div v-if="replyingTo?.id === message.id" class="mt-3 bg-white rounded-lg p-3 shadow-md">
                 <!-- Indiquer que l'utilisateur a répondu à un message -->
                 <!-- <div class="text-gray-600 mb-2">
                   <strong>A répondu à :</strong>
@@ -159,23 +104,14 @@
                   <span>{{ getUserId(replyingTo) }}</span>
                 </div>
 
-                <input
-                  v-model="replyContent"
-                  @keyup.enter="confirmReply(message.id)"
+                <input v-model="replyContent" @keyup.enter="confirmReply(message.id)"
                   class="w-full rounded-lg border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-blue-200"
-                  placeholder="Votre réponse..."
-                />
+                  placeholder="Votre réponse..." />
                 <div class="flex justify-end gap-2 mt-2">
-                  <button
-                    @click="cancelReply"
-                    class="text-xs text-gray-500 hover:text-gray-700"
-                  >
+                  <button @click="cancelReply" class="text-xs text-gray-500 hover:text-gray-700">
                     Annuler
                   </button>
-                  <button
-                    @click="confirmReply(message.id)"
-                    class="text-xs text-blue-500 hover:text-blue-700"
-                  >
+                  <button @click="confirmReply(message.id)" class="text-xs text-blue-500 hover:text-blue-700">
                     Répondre
                   </button>
                 </div>
@@ -189,47 +125,28 @@
       <div class="mt-4">
         <div class="flex flex-col">
           <div class="flex items-center gap-3">
-            <input
-              v-model="newMessage"
-              @keyup.enter="sendMessage"
-              class="flex-1 rounded-full px-5 py-3 border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition"
-              type="text"
-              placeholder="Écrivez votre message..."
-            />
-            <button @click="sendMessage" class="p-3 text-blue">
-              <svg
-                data-v-8765cc6e
-                class="svg-inline--fa fa-paper-plane w-5 h-5"
-                aria-hidden="true"
-                focusable="false"
-                data-prefix="fas"
-                data-icon="paper-plane"
-                role="img"
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 512 512"
-              >
-                <path
-                  class
-                  fill="#3B82F6"
-                  d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480l0-83.6c0-4 1.5-7.8 4.2-10.8L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z"
-                ></path>
-              </svg>
-            </button>
+            <div class="relative flex items-center gap-2">
+              <input v-model="newMessage" @keyup.enter="sendMessage"
+                class="flex-1 rounded-lg px-5 py-3 border-2 border-gray-300  outline-none transition pr-10 msgInput" 
+                type="text" name="message" placeholder="Écrivez votre message..." />
+              <button @click="sendMessage" class="absolute right-2 text-blue" v-if="newMessage.trim() !== ''">
+                <svg class="svg-inline--fa fa-paper-plane w-5 h-5" aria-hidden="true" focusable="false"
+                  data-prefix="fas" data-icon="paper-plane" role="img" xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 512 512">
+                  <path fill="#3B82F6"
+                    d="M498.1 5.6c10.1 7 15.4 19.1 13.5 31.2l-64 416c-1.5 9.7-7.4 18.2-16 23s-18.9 5.4-28 1.6L284 427.7l-68.5 74.1c-8.9 9.7-22.9 12.9-35.2 8.1S160 493.2 160 480l0-83.6c0-4 1.5-7.8 4.2-10.8L331.8 202.8c5.8-6.3 5.6-16-.4-22s-15.7-6.4-22-.7L106 360.8 17.7 316.6C7.1 311.3 .3 300.7 0 288.9s5.9-22.8 16.1-28.7l448-256c10.7-6.1 23.9-5.5 34 1.4z">
+                  </path>
+                </svg>
+              </button>
+            </div>
+
           </div>
         </div>
       </div>
     </div>
-    <ConfirmDelete
-      v-if="isModalVisible"
-      :isVisible="isModalVisible"
-      @confirm="handleDelete"
-      @cancel="isModalVisible = false"
-    />
-    <CustomNotification
-      v-if="notificationVisible"
-      :message="notificationMessage"
-      :type="notificationType"
-    />
+    <ConfirmDelete v-if="isModalVisible" :isVisible="isModalVisible" @confirm="handleDelete"
+      @cancel="isModalVisible = false" />
+    <CustomNotification v-if="notificationVisible" :message="notificationMessage" :type="notificationType" />
   </div>
 </template>
 
@@ -509,7 +426,7 @@ const handleDelete = () => {
 
 const replyingUserId = ref("");
 //  réponse au message
-const startReply = (message: Message) => {
+const startReply = (message: ChatComponent.Message) => {
   replyingTo.value = message;
   replyContent.value = "";
   replyingUserId.value = sessionStorage.getItem("userId") || "";
@@ -540,7 +457,7 @@ const confirmReply = (messageId: string) => {
   socket.value?.emit("replyMessage", {
     replyTo: messageId,
     userId: userID,
-    message: newMsg.text 
+    message: newMsg.text
   });
 
   messages.value.push(newMsg);
@@ -700,27 +617,36 @@ watch(getUnreadCount, (newCount) => {
 .message {
   margin-bottom: 10px;
 }
+
 .flex {
   display: flex;
 }
+
 .justify-end {
   justify-content: flex-end;
 }
+
 .justify-start {
   justify-content: flex-start;
 }
+
 .border-yellow-500 {
-  border-color: #fbbf24; /* Couleur pour les messages non lus */
+  border-color: #fbbf24;
+  /* Couleur pour les messages non lus */
 }
+
 @keyframes blink {
   0% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.5;
-    transform: scale(1.05); /* Augmente légèrement la taille */
+    transform: scale(1.05);
+    /* Augmente légèrement la taille */
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -729,5 +655,8 @@ watch(getUnreadCount, (newCount) => {
 
 .blink {
   animation: blink 1s infinite;
+}
+.msgInput :focus {
+  width: 25px;
 }
 </style>
