@@ -25,25 +25,52 @@
     />
 
     <!-- Incoming Call Modal -->
-    <div v-if="callStatus === 'incoming'" class="incoming-call-modal">
-      <div class="modal-content">
-        <h2>Appel entrant</h2>
-        <p>{{ remoteUserId }} vous appelle</p>
-        <p class="call-type">{{ isVideoCall ? 'Appel vidéo' : 'Appel audio' }}</p>
-        <div class="modal-actions">
-          <button @click="acceptIncomingCall" class="accept-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-              <path fill-rule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clip-rule="evenodd" />
-            </svg>
-            Accepter
-          </button>
-          <button @click="rejectIncomingCall" class="reject-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-              <path fill-rule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clip-rule="evenodd" />
-              <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z" clip-rule="evenodd" />
-            </svg>
-            Rejeter
-          </button>
+    <div v-if="callStatus === 'incoming'" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 transform transition-all">
+        <div class="flex flex-col items-center">
+          <!-- Avatar de l'appelant -->
+          <div class="w-20 h-20 bg-indigo-100 dark:bg-indigo-900 rounded-full flex items-center justify-center mb-4">
+            <span class="text-2xl font-bold text-indigo-600 dark:text-indigo-300">
+              {{ remoteUserId.charAt(0).toUpperCase() }}
+            </span>
+          </div>
+          
+          <!-- Informations de l'appel -->
+          <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Appel entrant</h2>
+          <p class="text-gray-600 dark:text-gray-300 mb-2">{{ remoteUserId }}</p>
+          <p class="text-sm text-indigo-600 dark:text-indigo-400 mb-6">
+            {{ isVideoCall ? 'Appel vidéo' : 'Appel audio' }}
+          </p>
+          
+          <!-- Animation d'appel -->
+          <div class="flex gap-1 mb-6">
+            <span class="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+            <span class="w-2 h-2 bg-indigo-600 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+            <span class="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"></span>
+          </div>
+          
+          <!-- Boutons d'action -->
+          <div class="flex gap-4">
+            <button 
+              @click="acceptIncomingCall" 
+              class="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-full transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                <path fill-rule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clip-rule="evenodd" />
+              </svg>
+              Accepter
+            </button>
+            <button 
+              @click="rejectIncomingCall" 
+              class="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                <path fill-rule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clip-rule="evenodd" />
+                <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z" clip-rule="evenodd" />
+              </svg>
+              Rejeter
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -135,8 +162,10 @@ const handleCallEnded = () => {
 
 // Accept incoming call
 const acceptIncomingCall = async () => {
+  // indique qu'il est dans l'appel
   isInCall.value = true;
-  // The actual call acceptance is handled by the CallView component
+// dire que l'appel est connecté 
+callStatus.value = 'connected';
 };
 
 // Reject incoming call
