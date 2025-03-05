@@ -24,7 +24,7 @@
     <div class="flex flex-col sm:flex-row gap-4 w-full">
       <!-- appel audio -->
       <button
-        @click="makeCall(1)"
+        @click="makeCall(false)"
         class="group relative flex-1 px-6 py-4 bg-gradient-to-r from-green-400 to-emerald-500
           rounded-xl font-bold text-white shadow-lg
           hover:from-green-500 hover:to-emerald-600
@@ -42,7 +42,7 @@
 
       <!-- appel vidéo -->
       <button
-        @click="makeCall(2)"
+        @click="makeCall(true)"
         class="group relative flex-1 px-6 py-4 bg-gradient-to-r from-blue-500 to-indigo-600
           rounded-xl font-bold text-white shadow-lg
           hover:from-blue-600 hover:to-indigo-700
@@ -64,17 +64,20 @@
 <script setup>
 import { ref } from 'vue';
 
-// props à recevoir du composant parent
-const props = defineProps({
-  onCall: Function
-});
+// Use defineEmits instead of props for event handling
+const emit = defineEmits(['call-initiated']);
 
 // variable pour l'identifiant de l'appelé
 const calleeUserID = ref('');
 
 // méthode pour l'appel
-const makeCall = (callType) => {
-  props.onCall(calleeUserID.value, callType);
+const makeCall = (withVideo) => {
+  if (!calleeUserID.value) {
+    alert('Veuillez entrer l\'identifiant de l\'appelé');
+    return;
+  }
+  // Emit event instead of calling props.onCall
+  emit('call-initiated', calleeUserID.value, withVideo);
 };
 </script>
 <style scoped>
