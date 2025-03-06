@@ -180,7 +180,31 @@ class WebRTCService {
           }
         }
       });
-    // Garder uniquement celui qui est déjà défini plus haut
+
+      // Add handler for call answer
+    this.socket.on('call-answer', async (data) => {
+        if (data.to === this.currentUserId) {
+          console.log('Received call answer:', data);
+          try {
+            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+            console.log('Remote description set successfully');
+          } catch (error) {
+            console.error('Error setting remote description:', error);
+          }
+        }
+      });
+  
+      // Add handler for ICE candidates
+      this.socket.on('ice-candidate', async (data) => {
+        if (data.to === this.currentUserId && this.peerConnection) {
+          try {
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+            console.log('Added ICE candidate successfully');
+          } catch (error) {
+            console.error('Error adding ICE candidate:', error);
+          }
+        }
+      });
   }
   async acceptCall() {
     console.log("Appel accepté");
@@ -218,7 +242,7 @@ class WebRTCService {
         from: this.currentUserId,
         withVideo: this.isVideoEnabled
       });
-
+      console.log("méthode emit surpassée")
       return true;
     } catch (error) {
       console.error('Error accepting call:', error);
