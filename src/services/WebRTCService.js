@@ -121,14 +121,33 @@ class WebRTCService {
       this.remoteUserId = remoteUserId;
       this.isCallActive = true;
       this.isVideoEnabled = withVideo;
-
+      console.log('Making call to:', remoteUserId, 'with video:', withVideo);
+  
       // Initialize peer connection
       this.initPeerConnection();
-
+  
+      // S'assurer que nous avons un flux local avant de créer l'offre
+      if (!this.localStream) {
+        const mediaResult = await this.getLocalMedia(withVideo);
+        if (!mediaResult.success) {
+          throw new Error('Failed to get local media');
+        }
+      }
+  
       // Create and send offer
-      const offer = await this.peerConnection.createOffer();
+      const offer = await this.peerConnection.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: withVideo
+      });
+      
+      console.log('Offer created:', offer);
       await this.peerConnection.setLocalDescription(offer);
-
+  
+      // Mettre à jour l'état de l'appel avant d'envoyer l'offre
+      if (this.onCallStatusChangeCallback) {
+        this.onCallStatusChangeCallback('outgoing', remoteUserId, withVideo);
+      }
+  
       // Send the offer to remote peer
       this.socket.emit('call-offer', {
         offer: this.peerConnection.localDescription,
@@ -136,7 +155,7 @@ class WebRTCService {
         from: this.currentUserId,
         withVideo: withVideo
       });
-
+  
       return true;
     } catch (error) {
       console.error('Error making call:', error);
@@ -149,95 +168,56 @@ class WebRTCService {
     if (!this.socket) return;
   
     this.socket.on('call-offer', async (data) => {
-      if (data.to === this.currentUserId) {
-        console.log('Received call offer from:', data.from);
-        this.remoteUserId = data.from;
-        this.isVideoEnabled = data.withVideo;
-  
-        if (this.onCallStatusChangeCallback) {
-          this.onCallStatusChangeCallback('incoming', this.remoteUserId, this.isVideoEnabled);
-        }
-  
-        this.pendingOffer = data.offer;
-      }
-    });
-  
-    this.socket.on('call-answer', async (data) => {
-      if (data.to === this.currentUserId) {
-        console.log('Call accepted by:', data.from);
-        try {
-          // Mettre à jour l'état de l'appel chez l'appelant
-          this.isCallActive = true;
+        if (data.to === this.currentUserId) {
+          console.log('Received call offer:', data);
+          // Set the remoteUserId when receiving the offer
+          this.remoteUserId = data.from;
+          this.isVideoEnabled = data.withVideo;
+          this.pendingOffer = data.offer;
           
           if (this.onCallStatusChangeCallback) {
-            this.onCallStatusChangeCallback('connected', this.remoteUserId, this.isVideoEnabled);
+            this.onCallStatusChangeCallback('incoming', data.from, data.withVideo);
           }
-          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-        } catch (error) {
-          console.error('Error setting remote description:', error);
         }
-      }
-    });
-    
-    // Ajouter la gestion des appels rejetés et terminés
-    this.socket.on('call-rejected', (data) => {
-      if (data.to === this.currentUserId) {
-        console.log('Call rejected by:', data.from);
-        if (this.onCallStatusChangeCallback) {
-          this.onCallStatusChangeCallback('ended', this.remoteUserId, false);
-        }
-        this.resetCall();
-      }
-    });
-    
-    this.socket.on('call-ended', (data) => {
-      if (data.to === this.currentUserId) {
-        console.log('Call ended by:', data.from);
-        if (this.onCallStatusChangeCallback) {
-          this.onCallStatusChangeCallback('ended', this.remoteUserId, false);
-        }
-        this.resetCall();
-      }
-    });
-  
-    this.socket.on('ice-candidate', async (data) => {
-      if (data.to === this.currentUserId && this.peerConnection) {
-        try {
-          await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } catch (error) {
-          console.error('Error adding ICE candidate:', error);
-        }
-      }
-    });
+      });
+    // Garder uniquement celui qui est déjà défini plus haut
   }
-
-  // Dans acceptCall
   async acceptCall() {
+    console.log("Appel accepté");
     try {
-      if (!this.pendingOffer || !this.remoteUserId) {
-        throw new Error('No pending call to accept');
+      if (!this.pendingOffer) {
+        throw new Error('No pending offer to accept');
       }
 
+      console.log('Current remote user:', this.remoteUserId); // Add this log
       this.isCallActive = true;
+      
+      if (!this.localStream) {
+        const mediaResult = await this.getLocalMedia(this.isVideoEnabled);
+        if (!mediaResult.success) {
+          throw new Error('Failed to get local media');
+        }
+      }
+
       this.initPeerConnection();
 
-      // Set remote description (the offer)
+      console.log('Setting remote description from pending offer');
       await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingOffer));
 
-      // Create and send answer
+      console.log('Creating answer');
       const answer = await this.peerConnection.createAnswer();
       await this.peerConnection.setLocalDescription(answer);
+
+      if (!this.remoteUserId) {
+        throw new Error('Remote user ID not set');
+      }
 
       this.socket.emit('call-answer', {
         answer: answer,
         to: this.remoteUserId,
-        from: this.currentUserId
+        from: this.currentUserId,
+        withVideo: this.isVideoEnabled
       });
-
-      // Ajouter cette ligne pour mettre à jour le statut chez l'appelé
-      if (this.onCallStatusChangeCallback) {
-        this.onCallStatusChangeCallback('connected', this.remoteUserId, this.isVideoEnabled);
-      }
 
       return true;
     } catch (error) {
@@ -258,7 +238,7 @@ class WebRTCService {
     }
   }
   // End an active call
-  endCall() {
+  async endCall() {
     if (this.remoteUserId && this.socket && this.isCallActive) {
       this.socket.emit('call-ended', {
         to: this.remoteUserId,
@@ -269,7 +249,7 @@ class WebRTCService {
     this.resetCall();
   }
   // Reset call state
-  resetCall() {
+  async resetCall() {
     // Stop all tracks in local stream
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => track.stop());
@@ -288,7 +268,7 @@ class WebRTCService {
     this.pendingOffer = null;
   }
   // Toggle audio mute
-  toggleAudio(mute) {
+  async toggleAudio(mute) {
     if (this.localStream) {
       const audioTracks = this.localStream.getAudioTracks();
       if (audioTracks.length > 0) {
@@ -297,7 +277,7 @@ class WebRTCService {
     }
   }
   // Toggle video
-  toggleVideo(off) {
+  async toggleVideo(off) {
     if (this.localStream) {
       const videoTracks = this.localStream.getVideoTracks();
       if (videoTracks.length > 0) {
