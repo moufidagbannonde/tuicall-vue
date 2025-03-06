@@ -161,6 +161,7 @@ const handleCallEnded = () => {
   callStatus.value = 'idle';
   remoteUserId.value = '';
   isIncomingCall.value = false;
+  isVideoCall.value = false; 
 };
 
 // Accept incoming call
