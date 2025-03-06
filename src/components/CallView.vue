@@ -1,6 +1,6 @@
 <template>
   <div class="call-container" :class="{ 'video-call': isVideoCall }">
-    <!-- Remote Video/Audio Stream -->
+    <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container" v-if="callStatus === 'connected'">
       <video ref="remoteVideo" autoplay :class="{ 'hidden': !isVideoCall }"></video>
       <div class="remote-audio-indicator" v-if="!isVideoCall">
@@ -16,12 +16,12 @@
       </div>
     </div>
 
-    <!-- Local Video Preview -->
+    <!-- Affichage du flux de la vidéo localement -->
     <div class="local-stream-container" v-if="localStream && isVideoCall">
       <video ref="localVideo" autoplay muted></video>
     </div>
 
-    <!-- Call Status Indicator -->
+    <!-- Indicateur du statut d'appel -->
     <div class="call-status" v-if="callStatus !== 'connected'">
       <div class="status-message text-center mt-5">
         <template v-if="callStatus === 'outgoing'">
@@ -35,6 +35,7 @@
 
     <!-- Commandes d'appel -->
     <div class="call-controls">
+      <!-- couper le son de l'appel -->
       <button @click="toggleMute" class="control-btn" :class="{ 'active': isMuted }">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path v-if="!isMuted" d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
@@ -45,7 +46,7 @@
           <path v-if="isMuted" d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z" />
         </svg>
       </button>
-
+      <!-- basculer entre l'affichage et le masquage de la vidéo -->
       <button @click="toggleVideo" class="control-btn" :class="{ 'active': isVideoOff }" v-if="isVideoCall">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path v-if="!isVideoOff"
@@ -54,7 +55,7 @@
             d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z" />
         </svg>
       </button>
-
+      <!-- mettre fin à l'appel -->
       <button @click="endCall" class="control-btn end-call">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path fill-rule="evenodd"
@@ -68,6 +69,7 @@
 
     <!-- Commandes d'appel entrant -->
     <div class="incoming-call-controls" v-if="callStatus === 'incoming'">
+      <!-- accepter l'appel -->
       <button @click="acceptCall()" class="accept-btn">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path fill-rule="evenodd"
@@ -76,6 +78,7 @@
         </svg>
         Accepter
       </button>
+      <!-- rejeter l'appel -->
       <button @click="rejectCall" class="reject-btn">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path fill-rule="evenodd"
@@ -93,7 +96,14 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import WebRTCService from '../services/WebRTCService';
+import { useToast } from 'vue-toastification';
 
+/**
+ * transfert de flux d'audio ou vidéo
+ * 
+ */
+
+// propriétés à recevoir  
 const props = defineProps({
   socket: Object,
   currentUserId: String,
@@ -102,23 +112,27 @@ const props = defineProps({
   callStatus: String,
   isIncoming: Boolean
 });
-
+// événements à émettre 
 const emit = defineEmits(['call-ended', 'call-status-change', 'video-disabled']);
 
-// Refs for video elements
+// notification(s)
+const toast = useToast();
+
+// Références pour les éléments vidéos
 const localVideo = ref(null);
 const remoteVideo = ref(null);
 
-// State variables
+// Variables d'état
 const localStream = ref(null);
 const remoteStream = ref(null);
 const isMuted = ref(false);
 const isVideoOff = ref(false);
-// Add this line to create a local ref for video call state
+
+// création d'une référence locale pour l'état de la vidéo
 const localIsVideoCall = ref(props.isVideoCall);
 const currentCallStatus = ref('');
 
-// Watch for props.isVideoCall changes
+// Suivre les changements du flux de la vidéo (afficher en temps réel ce que transmet la caméra de l'appelant)
 watch(() => props.isVideoCall, (newValue) => {
   localIsVideoCall.value = newValue;
 });
@@ -133,124 +147,202 @@ const callStatusText = computed(() => {
 });
 
 
-// Start an outgoing call
-const startOutgoingCall = async () => {
+/**
+ *  démarrage d'un appel vidéo ou audio sortant, en vérifiant la disponibilité des périphériques
+ * et en ajustant l'appel en fonction des ressources disponibles (caméra et micro).
+ */
+ const startOutgoingCall = async () => {
   try {
+    // Demander à WebRTCService de récupérer les flux audio/vidéo locaux en fonction du type d'appel
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
 
+    // Vérifier si la récupération du flux a échoué
     if (!result.success) {
+      // Si aucun périphérique audio n'est trouvé, afficher un avertissement et terminer l'appel
       if (result.noAudioDevice) {
-        alert('Aucun périphérique audio trouvé. Impossible de passer un appel.');
-        emit('call-ended');
+        toast.warning('Aucun périphérique audio trouvé. Impossible de passer un appel.');
+        emit('call-ended'); // Émettre un événement pour signaler que l'appel est terminé
         return;
       }
+      // Si une autre erreur se produit, lever une exception
       throw result.error;
     }
 
+    // Si la caméra n'est pas disponible, proposer de passer à un appel audio
     if (result.fallbackToAudio) {
       const switchToAudio = confirm(
         'Aucune caméra n\'a été trouvée. Voulez-vous basculer vers un appel audio ?'
       );
+      // Si l'utilisateur accepte, passer en mode appel audio
       if (switchToAudio) {
-        localIsVideoCall.value = false;
-        emit('video-disabled');
+        localIsVideoCall.value = false; // Mettre à jour le type d'appel à audio
+        emit('video-disabled'); // Émettre un événement pour indiquer que la vidéo est désactivée
       } else {
-        emit('call-ended');
+        emit('call-ended'); // Sinon, terminer l'appel
         return;
       }
     }
 
+    // Si tout est bon, initialiser le flux local et définir l'état de l'appel comme sortant
     localStream.value = result.stream;
-    currentCallStatus.value = 'outgoing'; // Mettre à jour l'état local
+    currentCallStatus.value = 'outgoing'; // Mettre à jour l'état de l'appel en cours à 'sortant'
+    
+    // Appeler la fonction pour établir l'appel avec l'utilisateur distant
     await WebRTCService.makeCall(props.remoteUserId, !result.fallbackToAudio && localIsVideoCall.value);
   } catch (error) {
+    // En cas d'erreur lors de l'initialisation de l'appel, afficher un message d'erreur
     console.error('Failed to start call:', error);
-    alert('Erreur lors de l\'initialisation de l\'appel. Veuillez réessayer.');
-    emit('call-ended');
+    toast.error('Erreur lors de l\'initialisation de l\'appel. Veuillez réessayer.');
+    emit('call-ended'); // Émettre un événement pour signaler que l'appel est terminé
   }
 };
 
-// Handle remote stream
-const handleRemoteStream = (stream) => {
+/**
+ *  gère le flux vidéo/audio distant reçu.
+ *  met à jour le flux distant et l'affiche si un élément vidéo est présent.
+ * @param {MediaStream} stream - Le flux vidéo/audio distant à afficher.
+ */
+ const handleRemoteStream = (stream) => {
+  // Mettre à jour la valeur du flux distant
   remoteStream.value = stream;
+  
+  // Si l'élément vidéo distant existe, l'afficher
   if (remoteVideo.value) {
     remoteVideo.value.srcObject = stream;
   }
 };
 
-// Handle call status change
+/**
+ * gère les changements de statut de l'appel.
+ * met à jour l'état local du statut de l'appel et émet un événement pour notifier
+ * les autres composants du changement.
+ * @param {string} status - Le nouveau statut de l'appel (ex. 'en cours', 'terminé', etc.).
+ * @param {string} userId - L'identifiant de l'utilisateur concerné par le changement de statut.
+ * @param {boolean} withVideo - Indique si l'appel est vidéo ou audio.
+ */
 const handleCallStatusChange = (status, userId, withVideo) => {
-  console.log('Call status changed:', status); // Pour le débogage
-  currentCallStatus.value = status; // Mettre à jour l'état local
+  console.log('Call status changed:', status); // Afficher le changement de statut pour le débogage
+  // Mettre à jour l'état local avec le nouveau statut de l'appel
+  currentCallStatus.value = status;
+  
+  // Émettre un événement pour signaler le changement de statut de l'appel aux autres composants
   emit('call-status-change', status, userId, withVideo);
 };
-// Initialize WebRTC service
-onMounted(() => {
+
+
+/**
+ *  fonction  appelée lorsque le composant est monté.
+ *  initialise le service WebRTC et démarre l'appel sortant si nécessaire.
+ */
+ onMounted(() => {
+  // Initialiser le type d'appel (vidéo ou audio) à partir des propriétés du composant
   localIsVideoCall.value = props.isVideoCall;
+  // Initialiser l'état actuel de l'appel à partir des propriétés du composant
   currentCallStatus.value = props.callStatus || '';
+  
+  // Initialiser le service WebRTC avec les paramètres nécessaires
   WebRTCService.init(props.socket, props.currentUserId, handleRemoteStream, handleCallStatusChange);
 
+  // Si l'appel est sortant, démarrer l'appel
   if (props.callStatus === 'outgoing' && props.remoteUserId) {
     startOutgoingCall();
   }
 });
 
-// Clean up on component unmount
+/**
+ *  fonction  appelée lorsque le composant est démonté.
+ *  termine l'appel WebRTC en cours pour libérer les ressources.
+ */
 onUnmounted(() => {
-  WebRTCService.endCall();
+  WebRTCService.endCall(); // Terminer l'appel en cours
 });
 
-// Watch for changes in video elements to attach streams
+/**
+ *  surveille les changements des éléments vidéo et des flux associés.
+ * Si un flux est disponible, il est attaché à l'élément vidéo correspondant.
+ */
 watch([localVideo, remoteVideo, localStream, remoteStream], () => {
+  // Si l'élément vidéo local et le flux local sont disponibles, les attacher
   if (localVideo.value && localStream.value) {
     localVideo.value.srcObject = localStream.value;
   }
+  // Si l'élément vidéo distant et le flux distant sont disponibles, les attacher
   if (remoteVideo.value && remoteStream.value) {
     remoteVideo.value.srcObject = remoteStream.value;
   }
 });
 
-// Accept an incoming call
-const acceptCall = async () => {
+/**
+ *  tente d'obtenir le média local (audio et/ou vidéo) et de démarrer l'appel une fois la configuration terminée.
+ */
+ const acceptCall = async () => {
   console.log("acceptCall() déclenchée dans le composant !");
   try {
+    // Tenter d'obtenir le média local (audio et/ou vidéo) en fonction du type d'appel
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
+    
+    // Si l'obtention des médias échoue, lancer une erreur
     if (!result.success) {
       throw result.error;
     }
+
+    // Assigner le flux local obtenu à la variable locale
     localStream.value = result.stream;
-    emit('call-status-change', )
+
+    // Notifier du changement de statut de l'appel (en attente de gestion du statut ici)
+    emit('call-status-change'); 
+
+    // Accepter l'appel via WebRTC
     await WebRTCService.acceptCall();
   } catch (error) {
+    // En cas d'échec, afficher l'erreur et émettre un événement pour mettre fin à l'appel
     console.error('Failed to accept call:', error);
     emit('call-ended');
   }
 };
 
-// Reject an incoming call
+/**
+ *  met fin à l'appel en rejetant la connexion via WebRTC et notifie les autres composants.
+ */
 const rejectCall = () => {
-  console.log("appel rejeté")
+  console.log("appel rejeté");
+  // Rejeter l'appel via WebRTC
   WebRTCService.rejectCall();
+  // Émettre un événement pour indiquer que l'appel est terminé
   emit('call-ended');
 };
 
-// End the current call
+/**
+ *  termine l'appel via WebRTC et notifie les autres composants.
+ */
 const endCall = () => {
+  // Terminer l'appel via WebRTC
   WebRTCService.endCall();
+  // Émettre un événement pour indiquer que l'appel est terminé
   emit('call-ended');
 };
 
-// Toggle audio mute
+/**
+ *  bascule l'état de l'audio et notifie le service WebRTC.
+ */
 const toggleMute = () => {
+  // Inverser l'état de la mise en sourdine
   isMuted.value = !isMuted.value;
+  // Activer/désactiver la mise en sourdine via WebRTC
   WebRTCService.toggleAudio(isMuted.value);
 };
 
-// Toggle video
+/**
+ *  bascule l'état de la vidéo et notifie le service WebRTC.
+ */
 const toggleVideo = () => {
+  // Inverser l'état de la vidéo (activée/désactivée)
   isVideoOff.value = !isVideoOff.value;
+  // Activer/désactiver la vidéo via WebRTC
   WebRTCService.toggleVideo(isVideoOff.value);
 };
+
+
 </script>
 
 <style scoped>

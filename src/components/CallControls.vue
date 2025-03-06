@@ -63,20 +63,33 @@
 
 <script setup>
 import { ref } from 'vue';
+import { useToast } from 'vue-toastification';
 
-// Use defineEmits instead of props for event handling
+/**
+ * Variables
+ */
+
+// événement(s) à émettre pour un appel initialisé
 const emit = defineEmits(['call-initiated']);
-
+// notification(s)
+const toast = useToast();
 // variable pour l'identifiant de l'appelé
 const calleeUserID = ref('');
 
-// méthode pour l'appel
+/**
+ * Fonctions
+ */
+
+ /**
+  * permet d'émettre l'événement de lancement d'appel 
+  * @param withVideo Boolean - vérifie si l'appel est vidéo ou pas
+  */
 const makeCall = (withVideo) => {
   if (!calleeUserID.value) {
-    alert('Veuillez entrer l\'identifiant de l\'appelé');
+    toast.error('Veuillez entrer l\'identifiant de l\'appelé');
     return;
   }
-  // Emit event instead of calling props.onCall
+  // Emettre l'événement d'initialisation de l'appel
   emit('call-initiated', calleeUserID.value, withVideo);
 };
 </script>
