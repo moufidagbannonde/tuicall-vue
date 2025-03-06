@@ -181,7 +181,7 @@ class WebRTCService {
             }
         });
 
-        // Add handler for call answer
+        //Réponse à l'appel
         this.socket.on('call-answer', async (data) => {
             if (data.to === this.currentUserId) {
                 console.log('Received call answer:', data);
@@ -194,7 +194,7 @@ class WebRTCService {
             }
         });
 
-        // Add handler for ICE candidates
+        // ICE candidates
         this.socket.on('ice-candidate', async (data) => {
             if (data.to === this.currentUserId && this.peerConnection) {
                 try {
@@ -203,6 +203,30 @@ class WebRTCService {
                 } catch (error) {
                     console.error('Error adding ICE candidate:', error);
                 }
+            }
+        });
+
+        // Ajouter l'écouteur pour la fin d'appel
+        this.socket.on('call-ended', (data) => {
+            if (data.to === this.currentUserId) {
+                console.log('Appel terminé par:', data.from);
+                // Informer l'interface utilisateur
+                if (this.onCallStatusChangeCallback) {
+                    this.onCallStatusChangeCallback('ended', data.from, false);
+                }
+                // Réinitialiser l'état de l'appel
+                this.resetCall();
+            }
+        });
+
+        // Appel rejeté
+        this.socket.on('call-rejected', (data) => {
+            if (data.to === this.currentUserId) {
+                console.log('Appel rejeté par:', data.from);
+                if (this.onCallStatusChangeCallback) {
+                    this.onCallStatusChangeCallback('rejected', data.from, false);
+                }
+                this.resetCall();
             }
         });
     }

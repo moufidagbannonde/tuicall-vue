@@ -152,6 +152,12 @@ const handleCallStatusChange = (status, userId, withVideo) => {
     isIncomingCall.value = true;
   } else if (status === 'connected') {
     isInCall.value = true;
+  } else if(status === 'idle'){
+    isInCall.value = false;
+      callStatus.value = 'idle';
+      remoteUserId.value = '';
+      isIncomingCall.value = false;
+      isVideoCall.value = false;
   }
 };
 

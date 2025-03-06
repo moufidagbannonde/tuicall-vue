@@ -22,9 +22,8 @@
     </div>
 
     <!-- Call Status Indicator -->
-    <p>État de l'appel : {{ callStatusText }}</p>
     <div class="call-status" v-if="callStatus !== 'connected'">
-      <div class="status-message">
+      <div class="status-message text-center mt-5">
         <template v-if="callStatus === 'outgoing'">
           Appel en cours vers {{ remoteUserId }}...
         </template>
