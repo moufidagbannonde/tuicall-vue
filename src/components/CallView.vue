@@ -1,12 +1,29 @@
 <template>
   <div class="call-container" :class="{ 'video-call': isVideoCall }">
+    <!-- Arrière-plan avec initiale pour l'appelant et l'appelé -->
+    <div class="background-initial" v-if="!isVideoCall && (callStatus === 'outgoing' || callStatus === 'incoming')">
+      <span class="large-initial">
+        {{ callStatus === 'outgoing' ? remoteUserId.charAt(0).toUpperCase() : currentUserId.charAt(0).toUpperCase() }}
+      </span>
+    </div>
+    <!-- chrono pour indiquer la durée d'appel -->
+    <div class="call-timer mt-3">
+    {{ formattedCallDuration }}
+  </div>
+
     <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container" v-if="callStatus === 'connected'">
       <video ref="remoteVideo" autoplay :class="{ 'hidden': !isVideoCall }"></video>
+      <template v-if="callStatus === 'outgoing' || callStatus === 'incoming'">
+        Appel en cours avec {{ currentUserId }}...
+      </template>
       <div class="remote-audio-indicator" v-if="!isVideoCall">
-        <div class="user-avatar"><span class="text-2xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-28 h-28 flex items-center justify-center">
-          {{ remoteUserId.charAt(0).toUpperCase() }}
-        </span></div>
+        <div class="user-avatar">
+          <span
+            class="text-2xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-28 h-28 flex items-center justify-center">
+            {{ remoteUserId.charAt(0).toUpperCase() }}
+          </span>
+        </div>
         <div class="audio-waves">
           <span></span>
           <span></span>
@@ -17,19 +34,27 @@
     </div>
 
     <!-- Affichage du flux de la vidéo localement -->
-    <div class="local-stream-container" v-if="localStream && isVideoCall">
-      <video ref="localVideo" autoplay muted></video>
+    <div class="local-stream-container" v-if="localStream">
+      <video ref="localVideo" autoplay muted :class="{ 'hidden': !isVideoCall }"></video>
+      <div class="local-audio-indicator" v-if="!isVideoCall">
+        <div class="user-avatar">
+          <span
+            class="text-xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-16 h-16 flex items-center justify-center">
+            {{ currentUserId.charAt(0).toUpperCase() }}
+          </span>
+        </div>
+      </div>
     </div>
 
     <!-- Indicateur du statut d'appel -->
     <div class="call-status" v-if="callStatus !== 'connected'">
       <div class="status-message text-center mt-5">
-        <template v-if="callStatus === 'outgoing'">
-          Appel en cours vers {{ remoteUserId }}...
+        <template v-if="callStatus === 'outgoing' || callStatus === 'incoming'">
+          Appel en cours avec {{ remoteUserId }}...
         </template>
-        <template v-else-if="callStatus === 'incoming'">
-          Appel entrant de {{ remoteUserId }}
-        </template>
+        <!-- <template v-else-if="callStatus === 'incoming'">
+        Appel entrant de {{ remoteUserId }}
+      </template> -->
       </div>
     </div>
 
@@ -63,6 +88,13 @@
             clip-rule="evenodd" />
           <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
             clip-rule="evenodd" />
+        </svg>
+      </button>
+      <!--enregistrer l'appel-->
+      <button @click="toggleRecording" :class="['control-button', isRecording ? 'recording' : '']"
+        title="Enregistrer l'appel">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <circle cx="12" cy="12" r="6" :fill="isRecording ? '#ff0000' : 'none'" stroke-width="2" />
         </svg>
       </button>
     </div>
@@ -102,7 +134,6 @@ import { useToast } from 'vue-toastification';
  * transfert de flux d'audio ou vidéo
  * 
  */
-
 // propriétés à recevoir  
 const props = defineProps({
   socket: Object,
@@ -121,6 +152,8 @@ const toast = useToast();
 // Références pour les éléments vidéos
 const localVideo = ref(null);
 const remoteVideo = ref(null);
+const isRecording = ref(false);
+
 
 // Variables d'état
 const localStream = ref(null);
@@ -146,12 +179,34 @@ const callStatusText = computed(() => {
   }
 });
 
+const toggleRecording = () => {
+  if (!isRecording.value) {
+    if (WebRTCService.startRecording()) {
+      isRecording.value = true;
+    }
+  } else {
+    if (WebRTCService.stopRecording()) {
+      isRecording.value = false;
+    }
+  }
+};
+
+const callStartTime = ref(null);
+const callDuration = ref(0);
+const timerInterval = ref(null);
+
+// Ajoutez cette computed property pour formater la durée
+const formattedCallDuration = computed(() => {
+  const minutes = Math.floor(callDuration.value / 60);
+  const seconds = callDuration.value % 60;
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+});
 
 /**
  *  démarrage d'un appel vidéo ou audio sortant, en vérifiant la disponibilité des périphériques
  * et en ajustant l'appel en fonction des ressources disponibles (caméra et micro).
  */
- const startOutgoingCall = async () => {
+const startOutgoingCall = async () => {
   try {
     // Demander à WebRTCService de récupérer les flux audio/vidéo locaux en fonction du type d'appel
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
@@ -186,7 +241,7 @@ const callStatusText = computed(() => {
     // Si tout est bon, initialiser le flux local et définir l'état de l'appel comme sortant
     localStream.value = result.stream;
     currentCallStatus.value = 'outgoing'; // Mettre à jour l'état de l'appel en cours à 'sortant'
-    
+
     // Appeler la fonction pour établir l'appel avec l'utilisateur distant
     await WebRTCService.makeCall(props.remoteUserId, !result.fallbackToAudio && localIsVideoCall.value);
   } catch (error) {
@@ -202,10 +257,10 @@ const callStatusText = computed(() => {
  *  met à jour le flux distant et l'affiche si un élément vidéo est présent.
  * @param {MediaStream} stream - Le flux vidéo/audio distant à afficher.
  */
- const handleRemoteStream = (stream) => {
+const handleRemoteStream = (stream) => {
   // Mettre à jour la valeur du flux distant
   remoteStream.value = stream;
-  
+
   // Si l'élément vidéo distant existe, l'afficher
   if (remoteVideo.value) {
     remoteVideo.value.srcObject = stream;
@@ -221,25 +276,37 @@ const callStatusText = computed(() => {
  * @param {boolean} withVideo - Indique si l'appel est vidéo ou audio.
  */
 const handleCallStatusChange = (status, userId, withVideo) => {
-  console.log('Call status changed:', status); // Afficher le changement de statut pour le débogage
-  // Mettre à jour l'état local avec le nouveau statut de l'appel
+  console.log('Call status changed:', status);
   currentCallStatus.value = status;
-  
-  // Émettre un événement pour signaler le changement de statut de l'appel aux autres composants
+
+  if (status === 'connected') {
+    // Démarrer le chronomètre
+    callStartTime.value = Date.now();
+    timerInterval.value = setInterval(() => {
+      callDuration.value = Math.floor((Date.now() - callStartTime.value) / 1000);
+    }, 1000);
+  } else {
+    // Arrêter le chronomètre
+    if (timerInterval.value) {
+      clearInterval(timerInterval.value);
+      timerInterval.value = null;
+    }
+    callDuration.value = 0;
+  }
+
   emit('call-status-change', status, userId, withVideo);
 };
-
 
 /**
  *  fonction  appelée lorsque le composant est monté.
  *  initialise le service WebRTC et démarre l'appel sortant si nécessaire.
  */
- onMounted(() => {
+onMounted(() => {
   // Initialiser le type d'appel (vidéo ou audio) à partir des propriétés du composant
   localIsVideoCall.value = props.isVideoCall;
   // Initialiser l'état actuel de l'appel à partir des propriétés du composant
   currentCallStatus.value = props.callStatus || '';
-  
+
   // Initialiser le service WebRTC avec les paramètres nécessaires
   WebRTCService.init(props.socket, props.currentUserId, handleRemoteStream, handleCallStatusChange);
 
@@ -254,6 +321,9 @@ const handleCallStatusChange = (status, userId, withVideo) => {
  *  termine l'appel WebRTC en cours pour libérer les ressources.
  */
 onUnmounted(() => {
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value);
+  }
   WebRTCService.endCall(); // Terminer l'appel en cours
 });
 
@@ -275,12 +345,11 @@ watch([localVideo, remoteVideo, localStream, remoteStream], () => {
 /**
  *  tente d'obtenir le média local (audio et/ou vidéo) et de démarrer l'appel une fois la configuration terminée.
  */
- const acceptCall = async () => {
-  console.log("acceptCall() déclenchée dans le composant !");
+const acceptCall = async () => {
   try {
     // Tenter d'obtenir le média local (audio et/ou vidéo) en fonction du type d'appel
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
-    
+
     // Si l'obtention des médias échoue, lancer une erreur
     if (!result.success) {
       throw result.error;
@@ -289,8 +358,11 @@ watch([localVideo, remoteVideo, localStream, remoteStream], () => {
     // Assigner le flux local obtenu à la variable locale
     localStream.value = result.stream;
 
+    // Mettre à jour le statut avant d'accepter l'appel
+    currentCallStatus.value = 'connected';
+
     // Notifier du changement de statut de l'appel (en attente de gestion du statut ici)
-    emit('call-status-change'); 
+    emit('call-status-change');
 
     // Accepter l'appel via WebRTC
     await WebRTCService.acceptCall();
@@ -424,5 +496,89 @@ const toggleVideo = () => {
 
 .control-btn.end-call {
   background-color: #dc2626;
+}
+
+.recording {
+  background-color: rgba(255, 0, 0, 0.2);
+}
+
+.control-button {
+  position: relative;
+}
+
+.control-button.recording::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background-color: #ff0000;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.5);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.local-audio-indicator {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #1a1a1a;
+}
+
+.local-stream-container .user-avatar span {
+  font-size: 1.5rem;
+  width: 3rem;
+  height: 3rem;
+}
+
+.background-initial {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 0;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.large-initial {
+  font-size: 25rem;
+  font-weight: bold;
+  color: white;
+}
+
+.call-timer {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.5);
+  padding: 5px 15px;
+  border-radius: 15px;
+  font-size: 1.2rem;
+  font-weight: bold;
 }
 </style>

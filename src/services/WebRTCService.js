@@ -10,6 +10,8 @@ class WebRTCService {
         this.remoteUserId = null;
         this.onRemoteStreamCallback = null;
         this.onCallStatusChangeCallback = null;
+        this.mediaRecorder = null;
+        this.recordedChunks = [];
 
         // Configuration STUN/TURN servers
         this.configuration = {
@@ -230,6 +232,50 @@ class WebRTCService {
             }
         });
     }
+
+    startRecording() {
+        if (this.localStream && this.remoteStream) {
+            const combinedStream = new MediaStream([
+                ...this.localStream.getTracks(),
+                ...this.remoteStream.getTracks()
+            ]);
+
+            this.mediaRecorder = new MediaRecorder(combinedStream);
+            this.recordedChunks = [];
+
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    this.recordedChunks.push(event.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = () => {
+                const blob = new Blob(this.recordedChunks, {
+                    type: 'video/webm'
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `call-recording-${new Date().toISOString()}.webm`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            this.mediaRecorder.start();
+            return true;
+        }
+        return false;
+    }
+
+    stopRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            this.mediaRecorder.stop();
+            return true;
+        }
+        return false;
+    }
+
+
     async acceptCall() {
         console.log("Appel accepté");
         try {
