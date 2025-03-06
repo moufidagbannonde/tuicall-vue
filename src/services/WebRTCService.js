@@ -166,13 +166,13 @@ class WebRTCService {
       if (data.to === this.currentUserId) {
         console.log('Call accepted by:', data.from);
         try {
-          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
           // Mettre à jour l'état de l'appel chez l'appelant
           this.isCallActive = true;
           
           if (this.onCallStatusChangeCallback) {
             this.onCallStatusChangeCallback('connected', this.remoteUserId, this.isVideoEnabled);
           }
+          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
         } catch (error) {
           console.error('Error setting remote description:', error);
         }

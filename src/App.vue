@@ -92,6 +92,7 @@ const generateUserId = () => {
 // State variables
 const socket = ref(null);
 const currentUserId = ref(generateUserId());
+// const currentUserId = ref("");
 const remoteUserId = ref('');
 const isInCall = ref(false);
 const isVideoCall = ref(false);

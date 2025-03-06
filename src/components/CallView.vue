@@ -1,5 +1,7 @@
 <template>
   <div class="call-container" :class="{ 'video-call': isVideoCall }">
+  
+  
     <!-- Remote Video/Audio Stream -->
     <div class="remote-stream-container" v-if="callStatus === 'connected'">
       <video ref="remoteVideo" autoplay :class="{ 'hidden': !isVideoCall }"></video>
@@ -15,12 +17,12 @@
         </div>
       </div>
     </div>
-
+  
     <!-- Local Video Preview -->
     <div class="local-stream-container" v-if="localStream && isVideoCall">
       <video ref="localVideo" autoplay muted></video>
     </div>
-
+  
     <!-- Call Status Indicator -->
     <p>État de l'appel : {{ callStatusText }}</p>
     <div class="call-status" v-if="callStatus !== 'connected'">
@@ -33,7 +35,7 @@
         </template>
       </div>
     </div>
-
+  
     <!-- Commandes d'appel -->
     <div class="call-controls">
       <button @click="toggleMute" class="control-btn" :class="{ 'active': isMuted }">
@@ -46,7 +48,7 @@
           <path v-if="isMuted" d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z" />
         </svg>
       </button>
-
+  
       <button @click="toggleVideo" class="control-btn" :class="{ 'active': isVideoOff }" v-if="isVideoCall">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path v-if="!isVideoOff"
@@ -55,7 +57,7 @@
             d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z" />
         </svg>
       </button>
-
+  
       <button @click="endCall" class="control-btn end-call">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path fill-rule="evenodd"
@@ -66,7 +68,7 @@
         </svg>
       </button>
     </div>
-
+  
     <!-- Commandes d'appel entrant -->
     <div class="incoming-call-controls" v-if="callStatus === 'incoming'">
       <button @click="acceptCall" class="accept-btn">
