@@ -190,6 +190,7 @@ const handleCallStatusChange = (status, userId, withVideo) => {
   isInCall.value = false;
   callStatus.value = 'idle';  // Statut de l'appel 
   remoteUserId.value = '';  //  l'ID de l'utilisateur distant
+  currentUserId.value = '';
   isIncomingCall.value = false;  // état de l'appel entrant
   isVideoCall.value = false;  // état de l'appel vidéo
 };
@@ -211,7 +212,8 @@ const acceptIncomingCall = async () => {
     localStream.value = result.stream;  // Assigner le flux local reçu
     await WebRTCService.acceptCall();  // Accepter l'appel WebRTC
   } catch (error) {
-    console.error('Failed to accept call:', error);  // Log de l'erreur
+    console.error('Failed to accept call:', error);  
+    // Log de l'erreur
     // En cas d'échec,  terminer l'appel
     handleCallEnded();  
   }

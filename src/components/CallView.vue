@@ -279,23 +279,31 @@ const handleCallStatusChange = (status, userId, withVideo) => {
   console.log('Call status changed:', status);
   currentCallStatus.value = status;
 
+  // Démarrer le timer quand l'appel est connecté
   if (status === 'connected') {
-    // Démarrer le chronomètre
+    console.log('Starting timer for status:', status);
+    // S'assurer qu'il n'y a pas déjà un timer en cours
+    if (timerInterval.value) {
+      clearInterval(timerInterval.value);
+    }
+    
     callStartTime.value = Date.now();
     timerInterval.value = setInterval(() => {
       callDuration.value = Math.floor((Date.now() - callStartTime.value) / 1000);
     }, 1000);
-  } else {
-    // Arrêter le chronomètre
+  } else if (status === 'ended' || status === 'rejected') {
+    // Arrêter le timer si l'appel est terminé ou rejeté
     if (timerInterval.value) {
       clearInterval(timerInterval.value);
       timerInterval.value = null;
     }
     callDuration.value = 0;
+    callStartTime.value = null;
   }
 
   emit('call-status-change', status, userId, withVideo);
 };
+
 
 /**
  *  fonction  appelée lorsque le composant est monté.
@@ -325,6 +333,7 @@ onUnmounted(() => {
     clearInterval(timerInterval.value);
   }
   WebRTCService.endCall(); // Terminer l'appel en cours
+  cleanupCallState();
 });
 
 /**
@@ -347,30 +356,56 @@ watch([localVideo, remoteVideo, localStream, remoteStream], () => {
  */
 const acceptCall = async () => {
   try {
-    // Tenter d'obtenir le média local (audio et/ou vidéo) en fonction du type d'appel
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
-
-    // Si l'obtention des médias échoue, lancer une erreur
     if (!result.success) {
       throw result.error;
     }
-
-    // Assigner le flux local obtenu à la variable locale
     localStream.value = result.stream;
 
-    // Mettre à jour le statut avant d'accepter l'appel
-    currentCallStatus.value = 'connected';
-
-    // Notifier du changement de statut de l'appel (en attente de gestion du statut ici)
-    emit('call-status-change');
-
-    // Accepter l'appel via WebRTC
+    // Accepter l'appel d'abord
     await WebRTCService.acceptCall();
+
+    // Mettre à jour le statut et émettre l'événement avec tous les paramètres
+    currentCallStatus.value = 'connected';
+    emit('call-status-change', 'connected', props.remoteUserId, localIsVideoCall.value);
+
   } catch (error) {
-    // En cas d'échec, afficher l'erreur et émettre un événement pour mettre fin à l'appel
     console.error('Failed to accept call:', error);
     emit('call-ended');
   }
+};
+
+
+// fonction pour nettoyer les états
+const cleanupCallState = () => {
+  console.log('Cleaning up call state...');
+  
+  // Arrêter le chronomètre d'abord
+  if (timerInterval.value) {
+    clearInterval(timerInterval.value);
+    timerInterval.value = null;
+  }
+
+  // Réinitialiser les flux
+  if (localStream.value) {
+    localStream.value.getTracks().forEach(track => track.stop());
+    localStream.value = null;
+  }
+  if (remoteStream.value) {
+    remoteStream.value.getTracks().forEach(track => track.stop());
+    remoteStream.value = null;
+  }
+
+  // Réinitialiser les éléments vidéo
+  if (localVideo.value) localVideo.value.srcObject = null;
+  if (remoteVideo.value) remoteVideo.value.srcObject = null;
+
+  // Réinitialiser les états
+  currentCallStatus.value = '';
+  isMuted.value = false;
+  isVideoOff.value = false;
+  callDuration.value = 0;
+  callStartTime.value = null;
 };
 
 /**
@@ -380,6 +415,8 @@ const rejectCall = () => {
   console.log("appel rejeté");
   // Rejeter l'appel via WebRTC
   WebRTCService.rejectCall();
+    // Nettoyer les états
+  cleanupCallState();
   // Émettre un événement pour indiquer que l'appel est terminé
   emit('call-ended');
 };
@@ -390,6 +427,8 @@ const rejectCall = () => {
 const endCall = () => {
   // Terminer l'appel via WebRTC
   WebRTCService.endCall();
+  // Nettoyer les états
+  cleanupCallState();
   // Émettre un événement pour indiquer que l'appel est terminé
   emit('call-ended');
 };
