@@ -321,7 +321,12 @@ const acceptIncomingCall = async () => {
     if (!result.success) {
       throw result.error;  // Lancer une erreur si la récupération du média échoue
     }
-    localStream.value = result.stream;  // Assigner le flux local reçu
+    localStream.value = result.stream;  
+      // Afficher le flux local
+      const localVideo = document.getElementById('localVideo');
+    if (localVideo) {
+      localVideo.srcObject = localStream.value;
+    }
     await WebRTCService.acceptCall();  // Accepter l'appel WebRTC
   } catch (error) {
     console.error('Failed to accept call:', error);  

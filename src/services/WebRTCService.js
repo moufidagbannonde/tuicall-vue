@@ -1,195 +1,138 @@
 class WebRTCService {
-    constructor() {
-        this.peerConnection = null;
-        this.localStream = null;
-        this.remoteStream = null;
-        this.isCallActive = false;
-        this.isVideoEnabled = false;
-        this.socket = null;
-        this.currentUserId = null;
-        this.remoteUserId = null;
-        this.onRemoteStreamCallback = null;
-        this.onCallStatusChangeCallback = null;
-        this.mediaRecorder = null;
-        this.recordedChunks = [];
+  constructor() {
+    this.peerConnection = null;
+    this.socket = null;
+    this.localStream = null;
+    this.remoteStream = null;
+    this.currentUserId = null;
+    this.onStreamCallback = null;
+    this.onStatusCallback = null;
+  }
 
-        // Configuration STUN/TURN servers
-        this.configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        };
+  static init(socket, userId, onStream, onStatus) {
+    if (!this.instance) {
+      this.instance = new WebRTCService();
     }
+    this.instance.socket = socket;
+    this.instance.currentUserId = userId;
+    this.instance.onStreamCallback = onStream;
+    this.instance.onStatusCallback = onStatus;
+    return this.instance;
+  }
 
-    /**
-     * initialiser la connexion P2P (Peer-To-Peer)
-     */
-    initPeerConnection() {
-        this.peerConnection = new RTCPeerConnection(this.configuration);
+  static async getLocalMedia(withVideo = false) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: withVideo,
+        audio: true
+      });
+      this.instance.localStream = stream;
+      return { success: true, stream };
+    } catch (error) {
+      console.error('Error getting local media:', error);
+      return { success: false, error };
+    }
+  }
 
-        this.peerConnection.onicecandidate = (event) => {
-            if (event.candidate && this.socket && this.remoteUserId) {
-                this.socket.emit('ice-candidate', {
-                    candidate: event.candidate,
-                    to: this.remoteUserId,
-                    from: this.currentUserId
-                });
-            }
-        };
+  static async acceptCall(remoteUserId, withVideo = true) {
+    try {
+      // Initialiser le flux local d'abord
+      const mediaResult = await this.getLocalMedia(withVideo);
+      if (!mediaResult.success) {
+        throw new Error('Failed to get local media');
+      }
 
-        this.peerConnection.ontrack = (event) => {
-            this.remoteStream = event.streams[0];
-            if (this.onRemoteStreamCallback) {
-                this.onRemoteStreamCallback(this.remoteStream);
-            }
-        };
+      this.instance.remoteUserId = remoteUserId;
 
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => {
-                this.peerConnection.addTrack(track, this.localStream);
-            });
+      // Créer une nouvelle connexion peer
+      this.instance.peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      });
+
+      // Ajouter les gestionnaires d'événements
+      this.instance.peerConnection.ontrack = (event) => {
+        this.instance.remoteStream = event.streams[0];
+        if (this.instance.onStreamCallback) {
+          this.instance.onStreamCallback(event.streams[0]);
         }
-    }
+      };
 
-    async getLocalMedia(withVideo) {
-        try {
-            const constraints = {
-                audio: true,
-                video: withVideo
-            };
+      // Ajouter le flux local
+      this.instance.localStream.getTracks().forEach(track => {
+        this.instance.peerConnection.addTrack(track, this.instance.localStream);
+      });
 
-            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            this.isVideoEnabled = withVideo;
+      // Créer et envoyer l'offre
+      const offer = await this.instance.peerConnection.createOffer();
+      await this.instance.peerConnection.setLocalDescription(offer);
 
-            // Ajouter les pistes au peer connection s'il existe
-            if (this.peerConnection && this.localStream) {
-                this.localStream.getTracks().forEach(track => {
-                    this.peerConnection.addTrack(track, this.localStream);
-                });
-            }
+      // Émettre l'acceptation avec l'offre
+      this.instance.socket.emit('call-accepted', {
+        from: this.instance.currentUserId,
+        to: remoteUserId,
+        localDescription: offer
+      });
 
-            return {
-                success: true,
-                stream: this.localStream
-            };
-        } catch (error) {
-            if (error.name === 'NotFoundError' && withVideo) {
-                // Essayer l'audio uniquement si la caméra n'est pas trouvée
-                try {
-                    this.localStream = await navigator.mediaDevices.getUserMedia({
-                        audio: true,
-                        video: false
-                    });
-
-                    if (this.peerConnection && this.localStream) {
-                        this.localStream.getTracks().forEach(track => {
-                            this.peerConnection.addTrack(track, this.localStream);
-                        });
-                    }
-
-                    return {
-                        success: true,
-                        stream: this.localStream,
-                        fallbackToAudio: true
-                    };
-                } catch (audioError) {
-                    return {
-                        success: false,
-                        error: audioError,
-                        noAudioDevice: true
-                    };
-                }
-            }
-            return {
-                success: false,
-                error
-            };
+      // Gérer les candidats ICE
+      this.instance.peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          this.instance.socket.emit('ice-candidate', {
+            candidate: event.candidate,
+            from: this.instance.currentUserId,
+            to: remoteUserId
+          });
         }
+      };
+
+      return true;
+    } catch (error) {
+      console.error('Error accepting call:', error);
+      throw error;
     }
-    // Initialize the service with socket and user ID
-   async init(socket, userId, onRemoteStream, onCallStatusChange) {
-        this.socket = socket;
-        this.currentUserId = userId;
-        this.onRemoteStreamCallback = onRemoteStream;
-        this.onCallStatusChangeCallback = onCallStatusChange;
+  }
 
-        // Setup socket event listeners
-        this.setupSocketListeners();
+  static rejectCall() {
+    if (this.instance && this.instance.socket) {
+      this.instance.socket.emit('call-rejected', {
+        from: this.instance.currentUserId
+      });
     }
-    // Setup socket event listeners for WebRTC signaling
-    async makeCall(remoteUserId, withVideo) {
-        try {
-            this.remoteUserId = remoteUserId;
-            this.isCallActive = true;
-            this.isVideoEnabled = withVideo;
+  }
 
-            // Initialize peer connection
-            this.initPeerConnection();
+  static endCall() {
+    if (this.instance) {
+      // Fermer la connexion peer
+      if (this.instance.peerConnection) {
+        this.instance.peerConnection.close();
+        this.instance.peerConnection = null;
+      }
 
-            // Get local media automatically for video calls
-            if (!this.localStream) {
-                const mediaResult = await this.getLocalMedia(withVideo);
-                if (!mediaResult.success) {
-                    throw new Error('Failed to get local media');
-                }
-            }
+      // Arrêter les flux
+      if (this.instance.localStream) {
+        this.instance.localStream.getTracks().forEach(track => track.stop());
+        this.instance.localStream = null;
+      }
 
-            // Create and send offer automatically
-            const offer = await this.peerConnection.createOffer({
-                offerToReceiveAudio: true,
-                offerToReceiveVideo: true // Always enable video
-            });
-
-            await this.peerConnection.setLocalDescription(offer);
-
-            // Update call status
-            if (this.onCallStatusChangeCallback) {
-                this.onCallStatusChangeCallback('outgoing', remoteUserId, true);
-            }
-
-            // Send offer
-            this.socket.emit('call-offer', {
-                offer: this.peerConnection.localDescription,
-                to: this.remoteUserId,
-                from: this.currentUserId,
-                withVideo: true
-            });
-
-            return true;
-        } catch (error) {
-            console.error('Error making call:', error);
-            return false;
-        }
+      // Émettre la fin d'appel
+      if (this.instance.socket) {
+        this.instance.socket.emit('call-ended', {
+          from: this.instance.currentUserId
+        });
+      }
     }
-    // Ajouter après la méthode init
-    setupSocketListeners() {
-        if (!this.socket) return;
+  }
 
-        this.socket.on('ice-candidate', async ({ candidate, from }) => {
-            if (this.peerConnection) {
-                await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            }
-        });
+  // Singleton pattern
+  static get instance() {
+    return this._instance;
+  }
 
-        this.socket.on('call-offer', async ({ offer, from, withVideo }) => {
-            this.remoteUserId = from;
-            if (this.onCallStatusChangeCallback) {
-                this.onCallStatusChangeCallback('incoming', from, withVideo);
-            }
-        });
-
-        this.socket.on('call-answer', async ({ answer, from }) => {
-            if (this.peerConnection) {
-                await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-            }
-        });
-
-        this.socket.on('call-rejected', ({ from }) => {
-            if (this.onCallStatusChangeCallback) {
-                this.onCallStatusChangeCallback('rejected', from);
-            }
-        });
-    }
+  static set instance(value) {
+    this._instance = value;
+  }
 }
-export default new WebRTCService();
+
+export default WebRTCService;
