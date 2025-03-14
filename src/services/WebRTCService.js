@@ -108,7 +108,7 @@ class WebRTCService {
         }
     }
     // Initialize the service with socket and user ID
-    init(socket, userId, onRemoteStream, onCallStatusChange) {
+   async init(socket, userId, onRemoteStream, onCallStatusChange) {
         this.socket = socket;
         this.currentUserId = userId;
         this.onRemoteStreamCallback = onRemoteStream;
@@ -123,12 +123,11 @@ class WebRTCService {
             this.remoteUserId = remoteUserId;
             this.isCallActive = true;
             this.isVideoEnabled = withVideo;
-            console.log('Making call to:', remoteUserId, 'with video:', withVideo);
 
             // Initialize peer connection
             this.initPeerConnection();
 
-            // S'assurer que nous avons un flux local avant de créer l'offre
+            // Get local media automatically for video calls
             if (!this.localStream) {
                 const mediaResult = await this.getLocalMedia(withVideo);
                 if (!mediaResult.success) {
@@ -136,255 +135,61 @@ class WebRTCService {
                 }
             }
 
-            // Create and send offer
+            // Create and send offer automatically
             const offer = await this.peerConnection.createOffer({
                 offerToReceiveAudio: true,
-                offerToReceiveVideo: withVideo
+                offerToReceiveVideo: true // Always enable video
             });
 
-            console.log('Offer created:', offer);
             await this.peerConnection.setLocalDescription(offer);
 
-            // Mettre à jour l'état de l'appel avant d'envoyer l'offre
+            // Update call status
             if (this.onCallStatusChangeCallback) {
-                this.onCallStatusChangeCallback('outgoing', remoteUserId, withVideo);
+                this.onCallStatusChangeCallback('outgoing', remoteUserId, true);
             }
 
-            // Send the offer to remote peer
+            // Send offer
             this.socket.emit('call-offer', {
                 offer: this.peerConnection.localDescription,
                 to: this.remoteUserId,
                 from: this.currentUserId,
-                withVideo: withVideo
+                withVideo: true
             });
 
             return true;
         } catch (error) {
             console.error('Error making call:', error);
-            this.isCallActive = false;
             return false;
         }
     }
-    // écouteurs d'événements pour la signalisation WebRTC
-    async setupSocketListeners() {
+    // Ajouter après la méthode init
+    setupSocketListeners() {
         if (!this.socket) return;
 
-        this.socket.on('call-offer', async (data) => {
-            if (data.to === this.currentUserId) {
-                console.log('Received call offer:', data);
-                // Set the remoteUserId when receiving the offer
-                this.remoteUserId = data.from;
-                this.isVideoEnabled = data.withVideo;
-                this.pendingOffer = data.offer;
-
-                if (this.onCallStatusChangeCallback) {
-                    this.onCallStatusChangeCallback('incoming', data.from, data.withVideo);
-                }
+        this.socket.on('ice-candidate', async ({ candidate, from }) => {
+            if (this.peerConnection) {
+                await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
             }
         });
 
-        //Réponse à l'appel
-        this.socket.on('call-answer', async (data) => {
-            if (data.to === this.currentUserId) {
-                console.log('Received call answer:', data);
-                try {
-                    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    console.log('Remote description set successfully');
-                } catch (error) {
-                    console.error('Error setting remote description:', error);
-                }
+        this.socket.on('call-offer', async ({ offer, from, withVideo }) => {
+            this.remoteUserId = from;
+            if (this.onCallStatusChangeCallback) {
+                this.onCallStatusChangeCallback('incoming', from, withVideo);
             }
         });
 
-        // ICE candidates
-        this.socket.on('ice-candidate', async (data) => {
-            if (data.to === this.currentUserId && this.peerConnection) {
-                try {
-                    await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    console.log('Added ICE candidate successfully');
-                } catch (error) {
-                    console.error('Error adding ICE candidate:', error);
-                }
+        this.socket.on('call-answer', async ({ answer, from }) => {
+            if (this.peerConnection) {
+                await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
             }
         });
 
-        // Ajouter l'écouteur pour la fin d'appel
-        this.socket.on('call-ended', (data) => {
-            if (data.to === this.currentUserId) {
-                console.log('Appel terminé par:', data.from);
-                // Informer l'interface utilisateur
-                if (this.onCallStatusChangeCallback) {
-                    this.onCallStatusChangeCallback('ended', data.from, false);
-                }
-                // Réinitialiser l'état de l'appel
-                this.resetCall();
+        this.socket.on('call-rejected', ({ from }) => {
+            if (this.onCallStatusChangeCallback) {
+                this.onCallStatusChangeCallback('rejected', from);
             }
         });
-
-        // Appel rejeté
-        this.socket.on('call-rejected', (data) => {
-            if (data.to === this.currentUserId) {
-                console.log('Appel rejeté par:', data.from);
-                if (this.onCallStatusChangeCallback) {
-                    this.onCallStatusChangeCallback('rejected', data.from, false);
-                }
-                this.resetCall();
-            }
-        });
-    }
-
-    startRecording() {
-        if (this.localStream && this.remoteStream) {
-            const combinedStream = new MediaStream([
-                ...this.localStream.getTracks(),
-                ...this.remoteStream.getTracks()
-            ]);
-
-            this.mediaRecorder = new MediaRecorder(combinedStream);
-            this.recordedChunks = [];
-
-            this.mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    this.recordedChunks.push(event.data);
-                }
-            };
-
-            this.mediaRecorder.onstop = () => {
-                const blob = new Blob(this.recordedChunks, {
-                    type: 'video/webm'
-                });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `call-recording-${new Date().toISOString()}.webm`;
-                a.click();
-                URL.revokeObjectURL(url);
-            };
-
-            this.mediaRecorder.start();
-            return true;
-        }
-        return false;
-    }
-
-    stopRecording() {
-        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-            this.mediaRecorder.stop();
-            return true;
-        }
-        return false;
-    }
-
-
-    async acceptCall() {
-        console.log("Appel accepté");
-        try {
-            if (!this.pendingOffer) {
-                throw new Error('No pending offer to accept');
-            }
-
-            console.log('Current remote user:', this.remoteUserId); // Add this log
-            this.isCallActive = true;
-
-            if (!this.localStream) {
-                const mediaResult = await this.getLocalMedia(this.isVideoEnabled);
-                if (!mediaResult.success) {
-                    throw new Error('Failed to get local media');
-                }
-            }
-
-            this.initPeerConnection();
-
-            console.log('Setting remote description from pending offer');
-            await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingOffer));
-
-            console.log('Creating answer');
-            const answer = await this.peerConnection.createAnswer();
-            await this.peerConnection.setLocalDescription(answer);
-
-            if (!this.remoteUserId) {
-                throw new Error('Remote user ID not set');
-            }
-
-            this.socket.emit('call-answer', {
-                answer: answer,
-                to: this.remoteUserId,
-                from: this.currentUserId,
-                withVideo: this.isVideoEnabled
-            });
-            console.log("méthode emit surpassée")
-            return true;
-        } catch (error) {
-            console.error('Error accepting call:', error);
-            this.isCallActive = false;
-            return false;
-        }
-    }
-    // Reject an incoming call
-    rejectCall() {
-        if (this.remoteUserId && this.socket) {
-            this.socket.emit('call-rejected', {
-                to: this.remoteUserId,
-                from: this.currentUserId
-            });
-
-            this.resetCall();
-        }
-    }
-    // End an active call
-    async endCall() {
-        if (this.remoteUserId && this.socket && this.isCallActive) {
-            this.socket.emit('call-ended', {
-                to: this.remoteUserId,
-                from: this.currentUserId
-            });
-        }
-
-        this.resetCall();
-    }
-    // Reset call state
-    async resetCall() {
-        // Stop all tracks in local stream
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => track.stop());
-            this.localStream = null;
-        }
-
-        // Close peer connection
-        if (this.peerConnection) {
-            this.peerConnection.close();
-            this.peerConnection = null;
-        }
-
-        this.remoteStream = null;
-        this.isCallActive = false;
-        this.isVideoEnabled = false;
-        this.remoteUserId = null;
-        this.pendingOffer = null;
-
-        // Émettre un changement de statut
-        if (this.onCallStatusChangeCallback) {
-            this.onCallStatusChangeCallback('idle', null, false);
-        }
-    }
-    // Toggle audio mute
-    async toggleAudio(mute) {
-        if (this.localStream) {
-            const audioTracks = this.localStream.getAudioTracks();
-            if (audioTracks.length > 0) {
-                audioTracks[0].enabled = !mute;
-            }
-        }
-    }
-    // Toggle video
-    async toggleVideo(off) {
-        if (this.localStream) {
-            const videoTracks = this.localStream.getVideoTracks();
-            if (videoTracks.length > 0) {
-                videoTracks[0].enabled = !off;
-            }
-        }
     }
 }
-
 export default new WebRTCService();

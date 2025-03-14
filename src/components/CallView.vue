@@ -309,18 +309,14 @@ const handleCallStatusChange = (status, userId, withVideo) => {
  *  fonction  appelée lorsque le composant est monté.
  *  initialise le service WebRTC et démarre l'appel sortant si nécessaire.
  */
-onMounted(() => {
-  // Initialiser le type d'appel (vidéo ou audio) à partir des propriétés du composant
-  localIsVideoCall.value = props.isVideoCall;
-  // Initialiser l'état actuel de l'appel à partir des propriétés du composant
-  currentCallStatus.value = props.callStatus || '';
-
-  // Initialiser le service WebRTC avec les paramètres nécessaires
-  WebRTCService.init(props.socket, props.currentUserId, handleRemoteStream, handleCallStatusChange);
-
-  // Si l'appel est sortant, démarrer l'appel
-  if (props.callStatus === 'outgoing' && props.remoteUserId) {
-    startOutgoingCall();
+// Dans le script setup
+onMounted(async () => {
+  const params = new URLSearchParams(window.location.search);
+  const clientId = params.get('clientId');
+  
+  // Si c'est le client et qu'il reçoit un appel, accepter automatiquement
+  if (props.currentUserId === clientId && props.callStatus === 'incoming') {
+    await acceptCall();
   }
 });
 
