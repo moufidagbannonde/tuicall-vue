@@ -23,10 +23,15 @@
         <p class="help-text">Partagez cet ID avec vos contacts pour qu'ils puissent vous appeler</p>
       </div>
     </div>
+
+
     <!-- Call View (quand l'appel) -->
     <CallView v-if="isInCall" :socket="socket" :current-user-id="currentUserId" :remote-user-id="remoteUserId"
       :is-video-call="isVideoCall" :call-status="callStatus" :is-incoming="isIncomingCall" @call-ended="handleCallEnded"
       @call-status-change="handleCallStatusChange" @video-disabled="handleVideoDisabled" />
+
+
+      
     <!-- Incoming Call Modal -->
     <div v-if="callStatus === 'incoming'"
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -324,14 +329,14 @@ const acceptIncomingCall = async () => {
     localStream.value = result.stream;  
       // Afficher le flux local
       const localVideo = document.getElementById('localVideo');
+
     if (localVideo) {
+      console.log('Affichage du flux local', localVideo);
       localVideo.srcObject = localStream.value;
     }
-    await WebRTCService.acceptCall();  // Accepter l'appel WebRTC
+    await WebRTCService.acceptCall();  
   } catch (error) {
     console.error('Failed to accept call:', error);  
-    // Log de l'erreur
-    // En cas d'échec,  terminer l'appel
     handleCallEnded();  
   }
 };
