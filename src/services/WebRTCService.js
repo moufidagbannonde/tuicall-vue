@@ -1,352 +1,198 @@
 class WebRTCService {
   constructor() {
-    this.peerConnection = null;
     this.socket = null;
+    this.peerConnection = null;
+    this.userId = null;
+    this.remoteUserId = null;
     this.localStream = null;
     this.remoteStream = null;
-    this.currentUserId = null;
-    this.onStreamCallback = null;
-    this.onStatusCallback = null;
+    this.isVideoEnabled = false;
+    this.onRemoteStream = null;
+    this.onCallStatusChange = null;
   }
 
-  static init(socket, userId, onStream, onStatus) {
-    if (!this.instance) {
-      this.instance = new WebRTCService();
-    }
-    this.instance.socket = socket;
-    this.instance.currentUserId = userId;
-    this.instance.onStreamCallback = onStream;
-    this.instance.onStatusCallback = onStatus;
-    
-    // Ajouter les écouteurs d'événements socket
-    this.instance.socket.on('ice-candidate', (data) => {
-      if (data.to === this.instance.currentUserId) {
-        console.log('Received ICE candidate:', data);
-        this.handleIceCandidate(data.candidate);
-      }
-    });
-    
-    this.instance.socket.on('call-offer', (data) => {
-      if (data.to === this.instance.currentUserId) {
-        console.log('Received call offer:', data);
-        this.handleOffer(data.offer, data.from);
-        if (this.instance.onStatusCallback) {
-          this.instance.onStatusCallback('incoming', data.from, data.withVideo);
-        }
-      }
-    });
-    
-    this.instance.socket.on('call-answer', (data) => {
-      if (data.to === this.instance.currentUserId) {
-        console.log('Received call answer:', data);
-        this.handleAnswer(data.answer);
-        if (this.instance.onStatusCallback) {
-          this.instance.onStatusCallback('connected', data.from, true);
-        }
-      }
-    });
-    
-    return this.instance;
+  init(socket, userId, onRemoteStream, onCallStatusChange) {
+    this.socket = socket;
+    this.userId = userId;
+    this.onRemoteStream = onRemoteStream;
+    this.onCallStatusChange = onCallStatusChange;
+
+    // Configurer les écouteurs d'événements
+    this.socket.on('call-offer', this.handleOffer.bind(this));
+    this.socket.on('call-answer', this.handleAnswer.bind(this));
+    this.socket.on('ice-candidate', this.handleIceCandidate.bind(this));
   }
 
-  // Renommer handleOffer en handleCallOffer pour cohérence
-  static async handleCallOffer(data) {
+  async getLocalMedia(withVideo) {
     try {
-      const { offer, from, withVideo } = data;
-      
-      if (!this.instance.peerConnection) {
-        this.instance.peerConnection = new RTCPeerConnection({
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
-        });
-        
-        // Configurer les gestionnaires d'événements
-        this.instance.peerConnection.ontrack = (event) => {
-          this.instance.remoteStream = event.streams[0];
-          if (this.instance.onStreamCallback) {
-            this.instance.onStreamCallback(event.streams[0]);
-          }
-        };
-        
-        this.instance.peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            this.instance.socket.emit('ice-candidate', {
-              candidate: event.candidate,
-              from: this.instance.currentUserId,
-              to: from
-            });
-          }
-        };
-      }
+      const constraints = {
+        audio: true,
+        video: withVideo
+      };
 
-      await this.instance.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-      
-      // Ajouter les pistes locales si disponibles
-      if (this.instance.localStream) {
-        this.instance.localStream.getTracks().forEach(track => {
-          this.instance.peerConnection.addTrack(track, this.instance.localStream);
-        });
-      }
-      
-      const answer = await this.instance.peerConnection.createAnswer();
-      await this.instance.peerConnection.setLocalDescription(answer);
-
-      this.instance.socket.emit('call-answer', {
-        answer,
-        from: this.instance.currentUserId,
-        to: from,
-        withVideo
-      });
-      
+      this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.isVideoEnabled = withVideo;
+      return { success: true, stream: this.localStream };
     } catch (error) {
-      console.error('Error handling call offer:', error);
-      throw error;
-    }
-  }
-
-  // Renommer handleAnswer en handleCallAnswer pour cohérence
-  static async handleCallAnswer(data) {
-    try {
-      const { answer, from } = data;
-      console.log('Setting remote description from answer');
-      const remoteDesc = new RTCSessionDescription(answer);
-      await this.instance.peerConnection.setRemoteDescription(remoteDesc);
-      
-      if (this.instance.onStatusCallback) {
-        this.instance.onStatusCallback('connected', from, true);
-      }
-    } catch (error) {
-      console.error('Error handling call answer:', error);
-      throw error;
-    }
-  }
-
-  static async acceptCall(remoteUserId, withVideo = false) {
-    try {
-      if (!this.instance) {
-        throw new Error('WebRTCService not initialized');
-      }
-  
-      // Create peer connection if not exists
-      if (!this.instance.peerConnection) {
-        this.instance.peerConnection = new RTCPeerConnection({
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
-        });
-        
-        // Handle incoming tracks
-        this.instance.peerConnection.ontrack = (event) => {
-          console.log('Track received in acceptCall:', event.streams[0]);
-          this.instance.remoteStream = event.streams[0];
-          if (this.instance.onStreamCallback) {
-            this.instance.onStreamCallback(event.streams[0]);
-          }
-        };
-        
-        // Handle ICE candidates
-        this.instance.peerConnection.onicecandidate = (event) => {
-          if (event.candidate) {
-            console.log('Sending ICE candidate in acceptCall');
-            this.instance.socket.emit('ice-candidate', {
-              candidate: event.candidate,
-              from: this.instance.currentUserId,
-              to: remoteUserId
-            });
-          }
-        };
-      }
-  
-      // Add local stream tracks to peer connection
-      if (this.instance.localStream) {
-        this.instance.localStream.getTracks().forEach(track => {
-          this.instance.peerConnection.addTrack(track, this.instance.localStream);
-        });
-      }
-  
-      // Notify that we're ready to receive an offer
-      this.instance.socket.emit('ready-for-offer', {
-        from: this.instance.currentUserId,
-        to: remoteUserId,
-        withVideo
-      });
-  
-      return true;
-    } catch (error) {
-      console.error('Error in acceptCall:', error);
-      throw error;
-    }
-  }
-  
-  static async getLocalMedia(withVideo = false) {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: withVideo,
-        audio: true
-      });
-      this.instance.localStream = stream;
-      return { success: true, stream };
-    } catch (error) {
-      console.error('Error getting local media:', error);
+      console.error('Erreur lors de l\'accès aux médias:', error);
       return { success: false, error };
     }
   }
 
-  static async makeCall(remoteUserId, withVideo = true) {
+  async makeCall(targetUserId, withVideo) {
+    this.remoteUserId = targetUserId;
+    this.isVideoEnabled = withVideo;
+
+    // Créer une nouvelle connexion peer
+    this.createPeerConnection();
+
+    // Ajouter les pistes locales
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        this.peerConnection.addTrack(track, this.localStream);
+      });
+    }
+
     try {
-      this.instance.peerConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      });
-
-      // Ajouter les tracks locaux
-      this.instance.localStream.getTracks().forEach(track => {
-        this.instance.peerConnection.addTrack(track, this.instance.localStream);
-      });
-
-      // Gérer les tracks distants
-      this.instance.peerConnection.ontrack = (event) => {
-        this.instance.remoteStream = event.streams[0];
-        if (this.instance.onStreamCallback) {
-          this.instance.onStreamCallback(event.streams[0]);
-        }
-      };
-
-      // Créer et envoyer l'offre
-      const offer = await this.instance.peerConnection.createOffer();
-      await this.instance.peerConnection.setLocalDescription(offer);
-
-      // Gérer les candidats ICE
-      this.instance.peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-          this.instance.socket.emit('ice-candidate', {
-            candidate: event.candidate,
-            from: this.instance.currentUserId,
-            to: remoteUserId
-          });
-        }
-      };
+      // Créer l'offre
+      const offer = await this.peerConnection.createOffer();
+      await this.peerConnection.setLocalDescription(offer);
 
       // Envoyer l'offre
-      this.instance.socket.emit('call-offer', {
-        offer,
-        from: this.instance.currentUserId,
-        to: remoteUserId,
+      this.socket.emit('call-offer', {
+        offer: this.peerConnection.localDescription,
+        from: this.userId,
+        to: targetUserId,
         withVideo
       });
 
+      return { success: true };
     } catch (error) {
-      console.error('Error making call:', error);
-      throw error;
+      console.error('Erreur lors de la création de l\'offre:', error);
+      return { success: false, error };
     }
   }
 
-  static async handleOffer(offer, from) {
+  async handleOffer(data) {
+    console.log('Offre reçue:', data);
+    this.remoteUserId = data.from;
+    this.isVideoEnabled = data.withVideo;
+
+    // Créer une connexion peer si elle n'existe pas
+    if (!this.peerConnection) {
+      this.createPeerConnection();
+    }
+
     try {
-      if (!this.instance.peerConnection) {
-        this.instance.peerConnection = new RTCPeerConnection({
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
+      // Définir l'offre distante
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+    } catch (error) {
+      console.error('Erreur lors de la définition de l\'offre distante:', error);
+    }
+  }
+
+  async acceptCall() {
+    try {
+      // Ajouter les pistes locales si elles existent
+      if (this.localStream) {
+        this.localStream.getTracks().forEach(track => {
+          this.peerConnection.addTrack(track, this.localStream);
         });
       }
 
-      await this.instance.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await this.instance.peerConnection.createAnswer();
-      await this.instance.peerConnection.setLocalDescription(answer);
+      // Créer une réponse
+      const answer = await this.peerConnection.createAnswer();
+      await this.peerConnection.setLocalDescription(answer);
 
-      this.instance.socket.emit('call-answer', {
-        answer,
-        from: this.instance.currentUserId,
-        to: from
+      // Envoyer la réponse
+      this.socket.emit('call-answer', {
+        answer: this.peerConnection.localDescription,
+        to: this.remoteUserId, 
+        withVideo: this.isVideoEnabled
       });
+
+      return { success: true };
     } catch (error) {
-      console.error('Error handling offer:', error);
-      throw error;
+      console.error('Erreur lors de l\'acceptation de l\'appel:', error);
+      return { success: false, error };
     }
   }
 
-  static async handleAnswer(answer) {
+  async handleAnswer(answer) {
+    console.log('Réponse reçue:', answer);
     try {
-      const remoteDesc = new RTCSessionDescription(answer);
-      await this.instance.peerConnection.setRemoteDescription(remoteDesc);
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
     } catch (error) {
-      console.error('Error handling answer:', error);
-      throw error;
+      console.error('Erreur lors de la définition de la réponse distante:', error);
     }
   }
 
-  static async handleIceCandidate(candidate) {
-    try {
-      if (this.instance.peerConnection) {
-        await this.instance.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+  handleIceCandidate(data) {
+    if (data.candidate) {
+      try {
+        this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (error) {
+        console.error('Erreur lors de l\'ajout du candidat ICE:', error);
       }
-    } catch (error) {
-      console.error('Error handling ICE candidate:', error);
     }
   }
 
-  static rejectCall() {
-    if (this.instance && this.instance.socket) {
-      this.instance.socket.emit('call-rejected', {
-        from: this.instance.currentUserId
-      });
-    }
-  }
+  createPeerConnection() {
+    const configuration = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
 
-  static endCall() {
-    if (this.instance) {
-      // Fermer la connexion peer
-      if (this.instance.peerConnection) {
-        this.instance.peerConnection.close();
-        this.instance.peerConnection = null;
-      }
+    this.peerConnection = new RTCPeerConnection(configuration);
 
-      // Arrêter les flux
-      if (this.instance.localStream) {
-        this.instance.localStream.getTracks().forEach(track => track.stop());
-        this.instance.localStream = null;
-      }
-
-      // Émettre la fin d'appel
-      if (this.instance.socket) {
-        this.instance.socket.emit('call-ended', {
-          from: this.instance.currentUserId
+    // Gérer les candidats ICE
+    this.peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        this.socket.emit('ice-candidate', {
+          candidate: event.candidate,
+          from: this.userId,
+          to: this.remoteUserId
         });
       }
+    };
+
+    // Gérer les pistes distantes
+    this.peerConnection.ontrack = (event) => {
+      this.remoteStream = event.streams[0];
+      if (this.onRemoteStream) {
+        this.onRemoteStream(this.remoteStream);
+      }
+    };
+
+    // Gérer les changements d'état de connexion
+    this.peerConnection.onconnectionstatechange = () => {
+      console.log('État de connexion:', this.peerConnection.connectionState);
+      if (this.peerConnection.connectionState === 'connected') {
+        if (this.onCallStatusChange) {
+          this.onCallStatusChange('connected', this.remoteUserId, this.isVideoEnabled);
+        }
+      }
+    };
+
+    return this.peerConnection;
+  }
+
+  endCall() {
+    if (this.peerConnection) {
+      this.peerConnection.close();
+      this.peerConnection = null;
     }
-  }
 
-  // Singleton pattern
-  static get instance() {
-    return this._instance;
-  }
-
-  static set instance(value) {
-    this._instance = value;
-  }
-
-  static toggleAudio(muted) {
-    if (this.instance.localStream) {
-      this.instance.localStream.getAudioTracks().forEach(track => {
-        track.enabled = !muted;
-      });
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+      this.localStream = null;
     }
-  }
 
-  static toggleVideo(disabled) {
-    if (this.instance.localStream) {
-      this.instance.localStream.getVideoTracks().forEach(track => {
-        track.enabled = !disabled;
-      });
-    }
+    this.remoteStream = null;
+    this.remoteUserId = null;
   }
 }
 
-export default WebRTCService;
+export default new WebRTCService();

@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <!-- Modal de saisie du nom -->
-    <div v-if="!currentUserId" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <!-- <div v-if="!currentUserId" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96">
         <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Entrez votre nom</h2>
         <input type="text" v-model="userName" @keyup.enter="submitUserName" placeholder="Votre nom"
@@ -11,7 +11,7 @@
           Commencer
         </button>
       </div>
-    </div>
+    </div> -->
 
     <!-- Call Controls (quand l'appel n'est pas encore lancé) -->
 
@@ -202,19 +202,30 @@ const submitUserName = () => {
       // Écouter l'offre d'appel
       socket.value.on('call-offer', (data) => {
         console.log('Offre d\'appel reçue:', data);
-        handleCallStatusChange('incoming', data.from, data.callInfo.withVideo);
+        // Ne pas changer l'état si déjà en appel
+        if (callStatus.value !== 'connected') {
+          handleCallStatusChange('incoming', data.from, data.withVideo);
+        }
       });
   
       // Écouter la réponse d'appel
       socket.value.on('call-answer', (data) => {
         console.log('Réponse d\'appel reçue:', data);
-        if (data.accepted) {
-          handleCallStatusChange('connected', data.from, isVideoCall.value);
-        } else {
-          handleCallStatusChange('rejected', data.from);
+        if (data.answer) {
+          // S'assurer que l'état passe à connected uniquement si la réponse est valide
+          handleCallStatusChange('connected', data.from || remoteUserId.value, isVideoCall.value);
+          // Informer le WebRTCService de la réponse
+          WebRTCService.handleAnswer(data.answer);
         }
       });
 
+      // Ajouter un gestionnaire pour la déconnexion du pair
+      socket.value.on('user-disconnected', (data) => {
+        console.log('Utilisateur déconnecté:', data);
+        if (data.userId === remoteUserId.value) {
+          handleCallEnded();
+        }
+      });
       if (typeof WebRTCService.init !== 'function') {
         console.error('WebRTCService.init is not implemented');
         return;
@@ -242,29 +253,36 @@ onUnmounted(() => {
 /**
  *  met à jour les variables d'état pour refléter l'appel sortant.
  */
-const handleCallInitiation = (targetUserId, withVideo) => {
-  // Assigner l'ID de l'utilisateur cible et le type d'appel (vidéo ou audio)
-  remoteUserId.value = targetUserId;
-  isVideoCall.value = withVideo;
+const handleCallInitiation = async (targetUserId, withVideo) => {
+  try {
+    // Get local media first
+    const mediaResult = await WebRTCService.getLocalMedia(withVideo);
+    if (!mediaResult.success) {
+      throw new Error('Failed to get local media');
+    }
+    
+    // Assigner l'ID de l'utilisateur cible et le type d'appel
+    remoteUserId.value = targetUserId;
+    isVideoCall.value = withVideo;
 
-  // Mettre à jour l'état de l'appel : en cours d'appel sortant
-  callStatus.value = 'outgoing';
-  isInCall.value = true;
-  isIncomingCall.value = false;
+    // Mettre à jour l'état de l'appel
+    callStatus.value = 'outgoing';
+    isInCall.value = true;
+    isIncomingCall.value = false;
 
-   // Émettre l'invitation d'appel
-   socket.value.emit('invite-to-call', {
-    inviteeID: targetUserId,
-    callerID: currentUserId.value,
-    roomID: Date.now().toString()
-  });
+    // Émettre l'invitation d'appel
+    socket.value.emit('invite-to-call', {
+      inviteeID: targetUserId,
+      callerID: currentUserId.value,
+      roomID: Date.now().toString()
+    });
 
-  // Émettre l'offre d'appel
-  socket.value.emit('call-offer', {
-    to: targetUserId,
-    from: currentUserId.value,
-    withVideo: withVideo
-  });
+    // Create and send the WebRTC offer through the WebRTCService
+    await WebRTCService.makeCall(targetUserId, withVideo);
+  } catch (error) {
+    console.error('Error initiating call:', error);
+    handleCallEnded();
+  }
 };
 /**
  *  fonction  appelée lorsque le flux vidéo à distance est reçu.
@@ -277,25 +295,36 @@ const handleRemoteStream = (stream) => {
  *  met à jour l'état local en fonction du nouveau statut.
  */
 const handleCallStatusChange = (status, userId, withVideo) => {
+  console.log('Changement de statut d\'appel:', { status, userId, withVideo });
+  
+  // Éviter les transitions d'état invalides
+  if (status === 'incoming' && callStatus.value === 'connected') {
+    console.log('Ignoré: déjà en appel');
+    return;
+  }
+
   // Mettre à jour le statut de l'appel
   callStatus.value = status;
 
   // Gérer les différents statuts de l'appel
-  if (status === 'incoming') {
-    // Si l'appel est entrant, mettre à jour l'ID de l'utilisateur distant et le type d'appel
-    remoteUserId.value = userId;
-    isVideoCall.value = withVideo;
-    isIncomingCall.value = true;
-  } else if (status === 'connected') {
-    // Si l'appel est connecté, mettre à jour l'état de l'appel
-    isInCall.value = true;
-  } else if (status === 'idle' || status === 'rejected') {
-    // Si l'appel est terminé ou rejeté, réinitialiser les états liés à l'appel
-    isInCall.value = false;
-    callStatus.value = 'idle';
-    remoteUserId.value = '';
-    isIncomingCall.value = false;
-    isVideoCall.value = false;
+  switch (status) {
+    case 'incoming':
+      remoteUserId.value = userId;
+      isVideoCall.value = withVideo;
+      isIncomingCall.value = true;
+      isInCall.value = false;
+      break;
+    
+    case 'connected':
+      isInCall.value = true;
+      isIncomingCall.value = false;
+      if (userId) remoteUserId.value = userId;
+      break;
+    
+    case 'idle':
+    case 'rejected':
+      handleCallEnded();
+      break;
   }
 };
 
