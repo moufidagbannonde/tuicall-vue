@@ -1,7 +1,7 @@
 <template>
   <div class="app-container">
     <!-- Modal de saisie du nom -->
-    <!-- <div v-if="!currentUserId" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div v-if="!currentUserId" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96">
         <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Entrez votre nom</h2>
         <input type="text" v-model="userName" @keyup.enter="submitUserName" placeholder="Votre nom"
@@ -11,27 +11,22 @@
           Commencer
         </button>
       </div>
-    </div> -->
+    </div>
 
     <!-- Call Controls (quand l'appel n'est pas encore lancé) -->
 
     <div v-if="!isInCall && currentUserId" class="controls-container">
-      <h1 class="app-title">Vue WebRTC Call</h1>
+      <h1 class="app-title"> WebRTC Call</h1>
       <CallControls @call-initiated="handleCallInitiation" />
       <div class="user-id-display">
         <p>Votre ID: <span class="user-id">{{ currentUserId }}</span></p>
         <p class="help-text">Partagez cet ID avec vos contacts pour qu'ils puissent vous appeler</p>
       </div>
     </div>
-
-
     <!-- Call View (quand l'appel) -->
     <CallView v-if="isInCall" :socket="socket" :current-user-id="currentUserId" :remote-user-id="remoteUserId"
       :is-video-call="isVideoCall" :call-status="callStatus" :is-incoming="isIncomingCall" @call-ended="handleCallEnded"
       @call-status-change="handleCallStatusChange" @video-disabled="handleVideoDisabled" />
-
-
-      
     <!-- Incoming Call Modal -->
     <div v-if="callStatus === 'incoming'"
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -84,6 +79,7 @@
   </div>
 
 </template>
+
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { io } from 'socket.io-client';
@@ -91,155 +87,168 @@ import CallControls from './components/CallControls.vue';
 import CallView from './components/CallView.vue';
 import WebRTCService from './services/WebRTCService';
 
-// Initialisation des refs
-const userName = ref('');
+// Generate a random user ID
+const generateUserId = () => {
+  return 'user_' + Math.random().toString(36).substr(2, 9);
+};
+
+// State variables
 const socket = ref(null);
+const userName = ref('');
 const currentUserId = ref('');
 const remoteUserId = ref('');
-const isVideoCall = ref(false);
 const isInCall = ref(false);
-const callStatus = ref('idle');
+const isVideoCall = ref(false);
+const callStatus = ref('idle'); // idle, outgoing, incoming, connected
 const isIncomingCall = ref(false);
 const localStream = ref(null);
+const agentId = ref(null);
+const clientId = ref(null);
+const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs en ligne
 
-// Ajout de onMounted pour initialiser automatiquement les IDs depuis l'URL
+/**
+ * Vérifie les paramètres d'URL et initialise la connexion si agentId et clientId sont présents
+ */
 onMounted(() => {
-  const params = new URLSearchParams(window.location.search);
-  const agentId = params.get('agentId');
-  const clientId = params.get('clientId');
-  const role = params.get('role');
-  // const encodedData = params.get('data');
-
-  if (agentId && clientId) {
-    // Set username based on role
-    if (role === 'agent') {
-      // For agent, use the decoded data
-      userName.value = agentId;
-    } else {
-      // For client, use the clientId
-      userName.value = clientId;
+  const urlParams = new URLSearchParams(window.location.search);
+  agentId.value = urlParams.get('agentId');
+  clientId.value = urlParams.get('clientId');
+  const role = urlParams.get('role');
+  
+  console.log('Paramètres URL détectés:', { agentId: agentId.value, clientId: clientId.value, role });
+  
+  if (agentId.value && role === "agent") {
+    console.log('Mode agent détecté avec ID:', agentId.value);
+    // Initialiser la connexion en tant qu'agent
+    initializeConnection(agentId.value);
+    
+    // Si clientId est présent, on va attendre qu'il soit en ligne avant de lancer l'appel
+    if (clientId.value) {
+      console.log('Client ID détecté:', clientId.value, 'en attente de sa connexion...');
     }
-
-    submitUserName();
-
-    // Initialize call automatically if it's the agent
-    // if (role === 'agent') {
-    //   setTimeout(() => {
-    //     console.log('Agent initiating call to client:', clientId);
-    //     handleCallInitiation(clientId, true);
-    //   }, 1000);
-    // }
+  } else if (clientId.value && role === "client") {
+    console.log('Mode client détecté avec ID:', clientId.value);
+    // Initialiser la connexion en tant que client
+    const clientInit = initializeConnection(clientId.value);
+    // si le client est initialisé , lancer l'appel de l'agent vers le client
+    
+  } else {
+    console.log('Mode manuel (sans paramètres URL valides)');
   }
 });
 
-// Update submitUserName to use role parameter
-// Ajouter une nouvelle ref pour l'état d'attente
-const isWaitingForClient = ref(false);
-const waitingForUserId = ref('');
-
-// Modifier submitUserName()
-const submitUserName = () => {
-  const params = new URLSearchParams(window.location.search);
-  const agentId = params.get('agentId');
-  const clientId = params.get('clientId');
-  const role = params.get('role');
-
-  if (agentId && clientId) {
-    socket.value = io('http://localhost:8080');
+/**
+ * Initialise la connexion avec l'ID spécifié
+ */
+const initializeConnection = (userId) => {
+  if (!userId) return;
+  
+  console.log('Initialisation de la connexion pour:', userId);
+  currentUserId.value = userId;
+  
+  // Initialiser la connexion socket
+  socket.value = io('http://localhost:8080');
+  
+  // Écouter les événements de connexion
+  // Dans la fonction initializeConnection, après l'émission de register-video-call
+  
+  socket.value.on('connect', () => {
+    console.log('Connecté au serveur socket.io');
     
-    if (role === 'agent') {
-      currentUserId.value = agentId;
-      remoteUserId.value = clientId;
-      // Activer l'état d'attente pour l'agent
-      isWaitingForClient.value = true;
-      waitingForUserId.value = clientId;
-
-      // Écouter la connexion du client
-      socket.value.on('user-connected', (connectedUserId) => {
-        if (connectedUserId === clientId) {
-          isWaitingForClient.value = false;
-          console.log('Client connected, initiating call...');
-          handleCallInitiation(clientId, true);
-        }
+    // Déterminer le type d'utilisateur
+    const role = new URLSearchParams(window.location.search).get('role');
+    const userType = role || 'unknown';
+    
+    // Émettre un événement pour enregistrer l'utilisateur
+    socket.value.emit('register', { 
+      userId: currentUserId.value,
+      userType: userType
+    });
+    
+    // Si c'est un client, émettre qu'il est prêt pour un appel
+    if (userType === 'client') {
+      console.log('Client prêt pour un appel, notification au serveur');
+      socket.value.emit('client-ready-for-call', {
+        clientId: currentUserId.value,
+        userType: userType
       });
-    } else {
-      currentUserId.value = clientId;
-      remoteUserId.value = agentId;
     }
-
-    socket.value.emit('user-connected', currentUserId.value);
+  });
   
-      // Écouter les événements d'appel
-      socket.value.on('call-invitation', (data) => {
-        console.log('Invitation reçue:', data);
-        handleCallStatusChange('incoming', data.callerID, true);
-      });
-  
-      socket.value.on('invitation-error', (data) => {
-        console.error('Erreur d\'invitation:', data.message);
-        handleCallStatusChange('idle', null, false);
-      });
-  
-      socket.value.on('call-answer-received', (data) => {
-        if (data.success) {
-          handleCallStatusChange('connected', remoteUserId.value, isVideoCall.value);
-        } else {
-          console.error('Erreur de réponse:', data.error);
-          handleCallStatusChange('idle', null, false);
+  // Ajouter un écouteur pour l'événement client-ready
+  socket.value.on('client-ready', (data) => {
+    console.log('ÉVÉNEMENT REÇU: Un client est prêt pour un appel:', data);
+    
+    // Si nous sommes l'agent et que c'est notre client qui est prêt
+    const role = new URLSearchParams(window.location.search).get('role');
+    if (role === 'agent' && clientId.value === data.clientId) {
+      console.log('Notre client est prêt pour un appel, préparation pour lancer l\'appel automatiquement');
+      
+      // Attendre un peu avant de lancer l'appel pour s'assurer que tout est initialisé
+      setTimeout(async () => {
+        try {
+          // Obtenir d'abord les permissions média
+          const mediaResult = await WebRTCService.getLocalMedia(true);
+          if (!mediaResult.success) {
+            throw mediaResult.error;
+          }
+          
+          // Stocker le flux local
+          localStream.value = mediaResult.stream;
+          
+          // S'assurer que les états sont correctement définis avant de lancer l'appel
+          remoteUserId.value = data.clientId;
+          isVideoCall.value = true;
+          callStatus.value = 'outgoing';
+          isInCall.value = true;
+          isIncomingCall.value = false;
+          
+          // Vérifier que les états sont bien définis
+          console.log('États avant appel:', {
+            remoteUserId: remoteUserId.value,
+            isVideoCall: isVideoCall.value,
+            callStatus: callStatus.value,
+            isInCall: isInCall.value,
+            isIncomingCall: isIncomingCall.value
+          });
+          
+          // Puis lancer l'appel
+          console.log('Permissions média obtenues, lancement automatique de l\'appel vers:', data.clientId);
+          handleCallInitiation(data.clientId, true);
+          WebRTCService.makeCall(data.clientId, true);
+        } catch (error) {
+          console.error('Erreur lors de la préparation de l\'appel automatique:', error);
+          alert('Impossible d\'accéder à la caméra ou au microphone. Veuillez vérifier vos permissions.');
         }
-      });
-  
-      socket.value.on('call-ended', (data) => {
-        handleCallEnded();
-      });
-
-      // Écouter l'invitation d'appel
-      socket.value.on('call-invitation', (data) => {
-        console.log('Invitation reçue:', data);
-        handleCallStatusChange('incoming', data.callerID, true);
-      });
-  
-      // Écouter l'offre d'appel
-      socket.value.on('call-offer', (data) => {
-        console.log('Offre d\'appel reçue:', data);
-        // Ne pas changer l'état si déjà en appel
-        if (callStatus.value !== 'connected') {
-          handleCallStatusChange('incoming', data.from, data.withVideo);
-        }
-      });
-  
-      // Écouter la réponse d'appel
-      socket.value.on('call-answer', (data) => {
-        console.log('Réponse d\'appel reçue:', data);
-        if (data.answer) {
-          // S'assurer que l'état passe à connected uniquement si la réponse est valide
-          handleCallStatusChange('connected', data.from || remoteUserId.value, isVideoCall.value);
-          // Informer le WebRTCService de la réponse
-          WebRTCService.handleAnswer(data.answer);
-        }
-      });
-
-      // Ajouter un gestionnaire pour la déconnexion du pair
-      socket.value.on('user-disconnected', (data) => {
-        console.log('Utilisateur déconnecté:', data);
-        if (data.userId === remoteUserId.value) {
-          handleCallEnded();
-        }
-      });
-      if (typeof WebRTCService.init !== 'function') {
-        console.error('WebRTCService.init is not implemented');
-        return;
-      }
-
-      WebRTCService.init(
-        socket.value,
-        currentUserId.value,
-        handleRemoteStream,
-        handleCallStatusChange
-      );
+      }, 2000);
     }
+  });
+  
+  // Écouter les mises à jour des utilisateurs en ligne
+  socket.value.on('online_users', (users) => {
+    console.log('Utilisateurs en ligne:', users);
+    onlineUsers.value = users;
+  });
+  
+  // Initialiser le service WebRTC avec la socket et le userId
+  WebRTCService.init(
+    socket.value,
+    currentUserId.value,
+    handleRemoteStream,
+    handleCallStatusChange
+  );
 };
 
+/**
+ * soumet le nom d'utilisateur, initialise la connexion socket et démarre le service WebRTC.
+ */
+const submitUserName = () => {
+  // Vérifier que le nom d'utilisateur n'est pas vide
+  if (userName.value.trim()) {
+    // Initialiser la connexion avec le nom d'utilisateur saisi
+    initializeConnection(userName.value.trim());
+  }
+};
 
 /**
  *  déconnecte la socket si elle existe.
@@ -253,36 +262,15 @@ onUnmounted(() => {
 /**
  *  met à jour les variables d'état pour refléter l'appel sortant.
  */
-const handleCallInitiation = async (targetUserId, withVideo) => {
-  try {
-    // Get local media first
-    const mediaResult = await WebRTCService.getLocalMedia(withVideo);
-    if (!mediaResult.success) {
-      throw new Error('Failed to get local media');
-    }
-    
-    // Assigner l'ID de l'utilisateur cible et le type d'appel
-    remoteUserId.value = targetUserId;
-    isVideoCall.value = withVideo;
+const handleCallInitiation = (targetUserId, withVideo) => {
+  // Assigner l'ID de l'utilisateur cible et le type d'appel (vidéo ou audio)
+  remoteUserId.value = targetUserId;
+  isVideoCall.value = withVideo;
 
-    // Mettre à jour l'état de l'appel
-    callStatus.value = 'outgoing';
-    isInCall.value = true;
-    isIncomingCall.value = false;
-
-    // Émettre l'invitation d'appel
-    socket.value.emit('invite-to-call', {
-      inviteeID: targetUserId,
-      callerID: currentUserId.value,
-      roomID: Date.now().toString()
-    });
-
-    // Create and send the WebRTC offer through the WebRTCService
-    await WebRTCService.makeCall(targetUserId, withVideo);
-  } catch (error) {
-    console.error('Error initiating call:', error);
-    handleCallEnded();
-  }
+  // Mettre à jour l'état de l'appel : en cours d'appel sortant
+  callStatus.value = 'outgoing';
+  isInCall.value = true;
+  isIncomingCall.value = false;
 };
 /**
  *  fonction  appelée lorsque le flux vidéo à distance est reçu.
@@ -295,53 +283,46 @@ const handleRemoteStream = (stream) => {
  *  met à jour l'état local en fonction du nouveau statut.
  */
 const handleCallStatusChange = (status, userId, withVideo) => {
-  console.log('Changement de statut d\'appel:', { status, userId, withVideo });
-  
-  // Éviter les transitions d'état invalides
-  if (status === 'incoming' && callStatus.value === 'connected') {
-    console.log('Ignoré: déjà en appel');
-    return;
-  }
-
   // Mettre à jour le statut de l'appel
   callStatus.value = status;
 
   // Gérer les différents statuts de l'appel
-  switch (status) {
-    case 'incoming':
-      remoteUserId.value = userId;
-      isVideoCall.value = withVideo;
-      isIncomingCall.value = true;
-      isInCall.value = false;
-      break;
-    
-    case 'connected':
-      isInCall.value = true;
-      isIncomingCall.value = false;
-      if (userId) remoteUserId.value = userId;
-      break;
-    
-    case 'idle':
-    case 'rejected':
-      handleCallEnded();
-      break;
+  if (status === 'incoming') {
+    // Si l'appel est entrant, mettre à jour l'ID de l'utilisateur distant et le type d'appel
+    remoteUserId.value = userId;
+    isVideoCall.value = withVideo;
+    isIncomingCall.value = true;
+  } else if (status === 'connected') {
+    // Si l'appel est connecté, mettre à jour l'état de l'appel
+    isInCall.value = true;
+  } else if (status === 'idle' || status === 'rejected') {
+    // Si l'appel est terminé ou rejeté, réinitialiser les états liés à l'appel
+    isInCall.value = false;
+    callStatus.value = 'idle';
+    remoteUserId.value = '';
+    isIncomingCall.value = false;
+    isVideoCall.value = false;
   }
 };
 
 /**
  *  réinitialise tous les états liés à l'appel.
  */
- const handleCallEnded = () => {
+const handleCallEnded = () => {
   // Mettre à jour les états 
   isInCall.value = false;
   callStatus.value = 'idle';  // Statut de l'appel 
   remoteUserId.value = '';  //  l'ID de l'utilisateur distant
-  currentUserId.value = '';
+  
+  // Ne pas réinitialiser currentUserId pour permettre de passer d'autres appels
+  // currentUserId.value = '';
+  
   isIncomingCall.value = false;  // état de l'appel entrant
   isVideoCall.value = false;  // état de l'appel vidéo
 };
 
-/**
+
+ /**
  * Elle met à jour l'état de l'appel et récupère le flux média local avant d'accepter l'appel.
  */
 const acceptIncomingCall = async () => {
@@ -355,17 +336,12 @@ const acceptIncomingCall = async () => {
     if (!result.success) {
       throw result.error;  // Lancer une erreur si la récupération du média échoue
     }
-    localStream.value = result.stream;  
-      // Afficher le flux local
-      const localVideo = document.getElementById('localVideo');
-
-    if (localVideo) {
-      console.log('Affichage du flux local', localVideo);
-      localVideo.srcObject = localStream.value;
-    }
-    await WebRTCService.acceptCall();  
+    localStream.value = result.stream;  // Assigner le flux local reçu
+    await WebRTCService.acceptCall();  // Accepter l'appel WebRTC
   } catch (error) {
     console.error('Failed to accept call:', error);  
+    // Log de l'erreur
+    // En cas d'échec,  terminer l'appel
     handleCallEnded();  
   }
 };
