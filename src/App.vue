@@ -325,7 +325,7 @@ const handleCallEnded = () => {
  /**
  * Elle met à jour l'état de l'appel et récupère le flux média local avant d'accepter l'appel.
  */
-const acceptIncomingCall = async () => {
+ const acceptIncomingCall = async () => {
   // Mettre à jour les états pour indiquer que l'appel est  connecté
   isInCall.value = true;
   callStatus.value = 'connected';  
@@ -345,6 +345,7 @@ const acceptIncomingCall = async () => {
     handleCallEnded();  
   }
 };
+
 
 /**
  *  met  à jour l'état et rejette l'appel.

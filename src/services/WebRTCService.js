@@ -277,49 +277,50 @@ class WebRTCService {
 
 
   async acceptCall() {
-      console.log("Appel accepté");
-      try {
-          if (!this.pendingOffer) {
-              throw new Error('No pending offer to accept');
-          }
+    console.log("Appel accepté");
+    try {
+        if (!this.pendingOffer) {
+            throw new Error('No pending offer to accept');
+        }
 
-          console.log('Current remote user:', this.remoteUserId); // Add this log
-          this.isCallActive = true;
+        console.log('Current remote user:', this.remoteUserId); // Add this log
+        this.isCallActive = true;
 
-          if (!this.localStream) {
-              const mediaResult = await this.getLocalMedia(this.isVideoEnabled);
-              if (!mediaResult.success) {
-                  throw new Error('Failed to get local media');
-              }
-          }
+        if (!this.localStream) {
+            const mediaResult = await this.getLocalMedia(this.isVideoEnabled);
+            if (!mediaResult.success) {
+                throw new Error('Failed to get local media');
+            }
+        }
 
-          this.initPeerConnection();
+        this.initPeerConnection();
 
-          console.log('Setting remote description from pending offer');
-          await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingOffer));
+        console.log('Setting remote description from pending offer');
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingOffer));
 
-          console.log('Creating answer');
-          const answer = await this.peerConnection.createAnswer();
-          await this.peerConnection.setLocalDescription(answer);
+        console.log('Creating answer');
+        const answer = await this.peerConnection.createAnswer();
+        await this.peerConnection.setLocalDescription(answer);
 
-          if (!this.remoteUserId) {
-              throw new Error('Remote user ID not set');
-          }
+        if (!this.remoteUserId) {
+            throw new Error('Remote user ID not set');
+        }
 
-          this.socket.emit('call-answer', {
-              answer: answer,
-              to: this.remoteUserId,
-              from: this.currentUserId,
-              withVideo: this.isVideoEnabled
-          });
-          console.log("méthode emit surpassée")
-          return true;
-      } catch (error) {
-          console.error('Error accepting call:', error);
-          this.isCallActive = false;
-          return false;
-      }
-  }
+        this.socket.emit('call-answer', {
+            answer: answer,
+            to: this.remoteUserId,
+            from: this.currentUserId,
+            withVideo: this.isVideoEnabled
+        });
+        console.log("méthode emit surpassée")
+        return true;
+    } catch (error) {
+        console.error('Error accepting call:', error);
+        this.isCallActive = false;
+        return false;
+    }
+}
+
   // Reject an incoming call
   rejectCall() {
       if (this.remoteUserId && this.socket) {
