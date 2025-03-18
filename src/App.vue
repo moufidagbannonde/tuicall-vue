@@ -17,7 +17,7 @@
 
     <div v-if="!isInCall && currentUserId" class="controls-container">
       <h1 class="app-title"> WebRTC Call</h1>
-      <CallControls @call-initiated="handleCallInitiation" />
+      <!-- <CallControls @call-initiated="handleCallInitiation" /> -->
       <div class="user-id-display">
         <p>Votre ID: <span class="user-id">{{ currentUserId }}</span></p>
         <p class="help-text">Partagez cet ID avec vos contacts pour qu'ils puissent vous appeler</p>
