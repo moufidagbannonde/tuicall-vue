@@ -7,13 +7,13 @@
       </span>
     </div>
     <!-- chrono pour indiquer la durée d'appel -->
-    <div class="call-timer mt-3">
+    <!-- <div class="call-timer mt-3">
     {{ formattedCallDuration }}
-  </div>
+  </div> -->
 
     <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container" v-if="callStatus === 'connected'">
-      <video ref="remoteVideo" autoplay :class="{ 'hidden': !isVideoCall }"></video>
+      <video ref="remoteVideo" autoplay :class="{ 'hidden': !isVideoCall }" :style="{ transform: 'scaleX(-1)' }"></video>
       <template v-if="callStatus === 'outgoing' || callStatus === 'incoming'">
         Appel en cours avec {{ currentUserId }}...
       </template>
@@ -35,7 +35,7 @@
 
     <!-- Affichage du flux de la vidéo localement -->
     <div class="local-stream-container" v-if="localStream">
-      <video ref="localVideo" autoplay muted :class="{ 'hidden': !isVideoCall }"></video>
+      <video ref="localVideo" autoplay muted :class="{ 'hidden': !isVideoCall }" :style="{ transform: 'scaleX(-1)' }"></video>
       <div class="local-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
           <span
@@ -56,6 +56,15 @@
         Appel entrant de {{ remoteUserId }}
       </template> -->
       </div>
+    </div>
+
+    <div v-if="callStatus === 'connected'" class="remote-media-indicators">
+        <div v-if="!remoteVideoEnabled" class="video-disabled-indicator">
+            Caméra désactivée
+        </div>
+        <div v-if="!remoteAudioEnabled" class="audio-disabled-indicator">
+            Micro désactivé
+        </div>
     </div>
 
     <!-- Commandes d'appel -->
@@ -91,12 +100,12 @@
         </svg>
       </button>
       <!--enregistrer l'appel-->
-      <button @click="toggleRecording" :class="['control-button', isRecording ? 'recording' : '']"
+      <!-- <button @click="toggleRecording" :class="['control-button', isRecording ? 'recording' : '']"
         title="Enregistrer l'appel">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <circle cx="12" cy="12" r="6" :fill="isRecording ? '#ff0000' : 'none'" stroke-width="2" />
         </svg>
-      </button>
+      </button> -->
     </div>
 
     <!-- Commandes d'appel entrant -->
@@ -318,6 +327,15 @@ onMounted(() => {
   // Initialiser le service WebRTC avec les paramètres nécessaires
   WebRTCService.init(props.socket, props.currentUserId, handleRemoteStream, handleCallStatusChange);
 
+  WebRTCService.onMediaStateChange = (data) => {
+    if (data.type === 'video') {
+      remoteVideoEnabled.value = data.enabled;
+      toast.info(`${data.from} a ${data.enabled ? 'activé' : 'désactivé'} sa caméra`);
+    } else if (data.type === 'audio') {
+      remoteAudioEnabled.value = data.enabled;
+      toast.info(`${data.from} a ${data.enabled ? 'activé' : 'désactivé'} son micro`);
+    }
+  };
   // Si l'appel est sortant, démarrer l'appel
   if (props.callStatus === 'outgoing' && props.remoteUserId) {
     startOutgoingCall();
@@ -433,24 +451,30 @@ const endCall = () => {
   emit('call-ended');
 };
 
+
+
+onUnmounted(() => {
+    if (WebRTCService.onMediaStateChange) {
+        WebRTCService.onMediaStateChange = null;
+    }
+});
+
 /**
  *  bascule l'état de l'audio et notifie le service WebRTC.
  */
 const toggleMute = () => {
-  // Inverser l'état de la mise en sourdine
   isMuted.value = !isMuted.value;
-  // Activer/désactiver la mise en sourdine via WebRTC
-  WebRTCService.toggleAudio(isMuted.value);
+    WebRTCService.toggleAudio(isMuted.value);
 };
 
+const remoteVideoEnabled = ref(true);
+const remoteAudioEnabled = ref(true);
 /**
  *  bascule l'état de la vidéo et notifie le service WebRTC.
  */
-const toggleVideo = () => {
-  // Inverser l'état de la vidéo (activée/désactivée)
-  isVideoOff.value = !isVideoOff.value;
-  // Activer/désactiver la vidéo via WebRTC
-  WebRTCService.toggleVideo(isVideoOff.value);
+ const toggleVideo = () => {
+    isVideoOff.value = !isVideoOff.value;
+    WebRTCService.toggleVideo(isVideoOff.value);
 };
 
 
