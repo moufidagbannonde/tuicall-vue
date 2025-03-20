@@ -86,6 +86,7 @@ import { io } from 'socket.io-client';
 import CallControls from './components/CallControls.vue';
 import CallView from './components/CallView.vue';
 import WebRTCService from './services/WebRTCService';
+import CryptoJS from 'crypto-js';
 
 // Generate a random user ID
 const generateUserId = () => {
@@ -106,13 +107,49 @@ const agentId = ref(null);
 const clientId = ref(null);
 const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs en ligne
 
+
+/**
+ * Decrypts encrypted data
+ * @param {string} encryptedData - The encrypted data in format "iv:encryptedText"
+ * @returns {string} - The decrypted text
+ */
+ function decryptData(encryptedData) {
+  try {
+    if (!encryptedData) return null;
+
+    // Utiliser la même clé secrète que dans le chiffrement
+    const secretKey = 'catarina-secure-key-2025';
+    const key = CryptoJS.enc.Utf8.parse(secretKey.padEnd(32).slice(0, 32)); // Assurer 32 octets
+
+    // Séparer l'IV et le texte chiffré
+    const [ivHex, encryptedText] = encryptedData.split(':');
+
+    // Convertir l'IV hexadécimal en WordArray
+    const iv = CryptoJS.enc.Hex.parse(ivHex);
+
+    // Déchiffrer les données
+    const decrypted = CryptoJS.AES.decrypt(encryptedText, key, {
+      iv: iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    });
+
+    // Retourner le texte déchiffré
+    return decrypted.toString(CryptoJS.enc.Utf8);
+  } catch (error) {
+    console.error('Failed to decrypt data:', error);
+    return null;
+  }
+}
+
+
 /**
  * Vérifie les paramètres d'URL et initialise la connexion si agentId et clientId sont présents
  */
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search);
-  agentId.value = urlParams.get('agentId');
-  clientId.value = urlParams.get('clientId');
+  agentId.value = decryptData(urlParams.get('agentId'));
+  clientId.value = decryptData(urlParams.get('clientId'));
   const role = urlParams.get('role');
   
   console.log('Paramètres URL détectés:', { agentId: agentId.value, clientId: clientId.value, role });

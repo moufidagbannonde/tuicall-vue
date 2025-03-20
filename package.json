@@ -21,6 +21,7 @@
     "aegis-web-sdk": "^1.39.2",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
     "i18next": "^23.16.8",
     "noty": "^3.1.4",
     "primeicons": "^7.0.0",
