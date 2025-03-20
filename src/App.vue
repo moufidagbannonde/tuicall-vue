@@ -17,7 +17,7 @@
 
     <div v-if="!isInCall && currentUserId" class="controls-container">
       <h1 class="app-title"> WebRTC Call</h1>
-      <CallControls @call-initiated="handleCallInitiation" />
+      <!-- <CallControls @call-initiated="handleCallInitiation" /> -->
       <div class="user-id-display">
         <p>Votre ID: <span class="user-id">{{ currentUserId }}</span></p>
         <p class="help-text">Partagez cet ID avec vos contacts pour qu'ils puissent vous appeler</p>
@@ -325,7 +325,7 @@ const handleCallEnded = () => {
  /**
  * Elle met à jour l'état de l'appel et récupère le flux média local avant d'accepter l'appel.
  */
-const acceptIncomingCall = async () => {
+ const acceptIncomingCall = async () => {
   // Mettre à jour les états pour indiquer que l'appel est  connecté
   isInCall.value = true;
   callStatus.value = 'connected';  
@@ -345,6 +345,7 @@ const acceptIncomingCall = async () => {
     handleCallEnded();  
   }
 };
+
 
 /**
  *  met  à jour l'état et rejette l'appel.

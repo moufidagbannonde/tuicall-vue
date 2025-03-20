@@ -23,7 +23,7 @@
     <!-- Boutons d'appel -->
     <div class="flex flex-col sm:flex-row gap-4 w-full">
       <!-- appel audio -->
-      <button
+      <!-- <button
         @click="makeCall(false)"
         class="group relative flex-1 px-6 py-4 bg-gradient-to-r from-green-400 to-emerald-500
           rounded-xl font-bold text-white shadow-lg
@@ -38,7 +38,7 @@
           </svg>
           <span>Appel Audio</span>
         </div>
-      </button>
+      </button> -->
 
       <!-- appel vidéo -->
       <button
