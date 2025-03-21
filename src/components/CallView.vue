@@ -58,9 +58,9 @@
       </div>
     </div>
 
-    <div v-if="callStatus === 'connected'" class="remote-media-indicators">
+    <div class="remote-media-indicators">
         <div v-if="!remoteVideoEnabled" class="video-disabled-indicator">
-            Caméra désactivée
+          {{ remoteUserId }} a désactivé sa caméra
         </div>
         <div v-if="!remoteAudioEnabled" class="audio-disabled-indicator">
             Micro désactivé
@@ -327,15 +327,15 @@ onMounted(() => {
   // Initialiser le service WebRTC avec les paramètres nécessaires
   WebRTCService.init(props.socket, props.currentUserId, handleRemoteStream, handleCallStatusChange);
 
-  WebRTCService.onMediaStateChange = (data) => {
-    if (data.type === 'video') {
-      remoteVideoEnabled.value = data.enabled;
-      toast.info(`${data.from} a ${data.enabled ? 'activé' : 'désactivé'} sa caméra`);
-    } else if (data.type === 'audio') {
-      remoteAudioEnabled.value = data.enabled;
-      toast.info(`${data.from} a ${data.enabled ? 'activé' : 'désactivé'} son micro`);
+  // Écouter l'événement toggle-video
+  props.socket.on('toggle-video', (data) => {
+    console.log('Réception de l\'événement toggle-video:', data);
+    if (data.from === props.remoteUserId) {
+      // Mettre à jour l'état de la vidéo distante
+      remoteVideoEnabled.value = !data.off;
+      console.log(`L'utilisateur distant ${data.from} a ${data.off ? 'désactivé' : 'activé'} sa caméra`);
     }
-  };
+  });
   // Si l'appel est sortant, démarrer l'appel
   if (props.callStatus === 'outgoing' && props.remoteUserId) {
     startOutgoingCall();
@@ -474,7 +474,7 @@ const remoteAudioEnabled = ref(true);
  */
  const toggleVideo = () => {
     isVideoOff.value = !isVideoOff.value;
-    WebRTCService.toggleVideo(isVideoOff.value);
+    WebRTCService.toggleVideo(isVideoOff.value, props.remoteUserId, props.currentUserId);
 };
 
 

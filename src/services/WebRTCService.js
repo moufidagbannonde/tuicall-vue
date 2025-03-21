@@ -388,11 +388,16 @@ class WebRTCService {
         }
     }
     // Toggle video
-    async toggleVideo(off) {
+    async toggleVideo(off, remoteUserId, currentUserId) {
         if (this.localStream) {
             const videoTracks = this.localStream.getVideoTracks();
             if (videoTracks.length > 0) {
                 videoTracks[0].enabled = !off;
+                this.socket.emit('toggle-video', {
+                    to: remoteUserId,
+                    from: currentUserId || this.currentUserId, 
+                    off: off 
+                });
             }
         }
     }

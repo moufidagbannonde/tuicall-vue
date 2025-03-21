@@ -117,9 +117,9 @@ const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs e
   try {
     if (!encryptedData) return null;
 
-    // Utiliser la même clé secrète que dans le chiffrement
+    // Utiliser la  clé secrète  dans le chiffrement
     const secretKey = 'catarina-secure-key-2025';
-    const key = CryptoJS.enc.Utf8.parse(secretKey.padEnd(32).slice(0, 32)); // Assurer 32 octets
+    const key = CryptoJS.enc.Utf8.parse(secretKey.padEnd(32).slice(0, 32)); //  32 octets
 
     // Séparer l'IV et le texte chiffré
     const [ivHex, encryptedText] = encryptedData.split(':');
