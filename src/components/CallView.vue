@@ -1,18 +1,14 @@
 <template>
   <div class="call-container" :class="{ 'video-call': isVideoCall }">
     <!-- Arrière-plan avec initiale pour l'appelant et l'appelé -->
-    <div
-      class="background-initial"
-      v-if="
-        !isVideoCall && (callStatus === 'outgoing' || callStatus === 'incoming')
-      "
-    >
+    <div class="background-initial" v-if="!isVideoCall && (callStatus === 'outgoing' || callStatus === 'incoming')
+    ">
       <span class="large-initial">
         {{
-          callStatus === "outgoing"
-            ? remoteUserId.charAt(0).toUpperCase()
-            : currentUserId.charAt(0).toUpperCase()
-        }}
+    callStatus === "outgoing"
+      ? remoteUserId.charAt(0).toUpperCase()
+      : currentUserId.charAt(0).toUpperCase()
+  }}
       </span>
     </div>
     <!-- chrono pour indiquer la durée d'appel -->
@@ -22,20 +18,14 @@
 
     <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container" v-if="callStatus === 'connected'">
-      <video
-        ref="remoteVideo"
-        autoplay
-        :class="{ hidden: !isVideoCall }"
-        :style="{ transform: 'scaleX(-1)' }"
-      ></video>
+      <video ref="remoteVideo" autoplay :class="{ hidden: !isVideoCall }" :style="{ transform: 'scaleX(-1)' }"></video>
       <template v-if="callStatus === 'outgoing' || callStatus === 'incoming'">
         Appel en cours avec {{ currentUserId }}...
       </template>
       <div class="remote-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
           <span
-            class="text-2xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-28 h-28 flex items-center justify-center"
-          >
+            class="text-2xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-28 h-28 flex items-center justify-center">
             {{ remoteUserId.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -50,18 +40,12 @@
 
     <!-- Affichage du flux de la vidéo localement -->
     <div class="local-stream-container" v-if="localStream">
-      <video
-        ref="localVideo"
-        autoplay
-        muted
-        :class="{ hidden: !isVideoCall }"
-        :style="{ transform: 'scaleX(-1)' }"
-      ></video>
+      <video ref="localVideo" autoplay muted :class="{ hidden: !isVideoCall }"
+        :style="{ transform: 'scaleX(-1)' }"></video>
       <div class="local-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
           <span
-            class="text-xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-16 h-16 flex items-center justify-center"
-          >
+            class="text-xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-16 h-16 flex items-center justify-center">
             {{ currentUserId.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -80,88 +64,75 @@
       </div>
     </div>
 
-    <div class="remote-media-indicators">
-      <div v-if="!remoteVideoEnabled" class="video-disabled-indicator">
-        {{ remoteUserId }} a désactivé sa caméra
-      </div>
-      <div v-if="!remoteAudioEnabled" class="audio-disabled-indicator">
-        {{ remoteUserId }} a désactivé son micro
-      </div>
+    <div class="remote-media-indicators space-y-3 fixed top-5 right-5 z-50">
+      <transition enter-active-class="transform ease-out duration-300 transition"
+        enter-from-class="translate-y-[-20px] opacity-0" enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transform ease-in duration-200 transition" leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-[-20px] opacity-0">
+        <div v-if="!remoteVideoEnabled"
+          class="video-disabled-indicator flex items-center bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-red-400">
+          <div class="flex items-center space-x-3">
+            <div class="p-2 bg-red-700 rounded-full">
+              <span class="text-xl">🎥</span>
+            </div>
+            <div>
+              <p class="text-sm font-medium">Caméra désactivée</p>
+              <p class="text-xs opacity-80">{{ remoteUserId }} a coupé sa caméra</p>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <transition enter-active-class="transform ease-out duration-300 transition"
+        enter-from-class="translate-y-[-20px] opacity-0" enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transform ease-in duration-200 transition" leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-[-20px] opacity-0">
+        <div v-if="!remoteAudioEnabled"
+          class="audio-disabled-indicator flex items-center bg-gradient-to-r from-gray-700 to-gray-800 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-gray-600">
+          <div class="flex items-center space-x-3">
+            <div class="p-2 bg-gray-900 rounded-full">
+              <span class="text-xl">🎤</span>
+            </div>
+            <div>
+              <p class="text-sm font-medium">Micro désactivé</p>
+              <p class="text-xs opacity-80">{{ remoteUserId }} a coupé son micro</p>
+            </div>
+          </div>
+        </div>
+      </transition>
     </div>
+
 
     <!-- Commandes d'appel -->
     <div class="call-controls">
       <!-- couper le son de l'appel -->
-      <button
-        @click="toggleMute"
-        class="control-btn"
-        :class="{ active: isMuted }"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            v-if="!isMuted"
-            d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z"
-          />
-          <path
-            v-if="!isMuted"
-            d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z"
-          />
-          <path
-            v-if="isMuted"
-            d="M10.5 1.875a1.125 1.125 0 012.25 0v8.25c0 .621-.504 1.125-1.125 1.125h-1.5a1.125 1.125 0 01-1.125-1.125v-8.25a1.125 1.125 0 011.125-1.125h1.5zm-4.5 4.5a.75.75 0 00-1.5 0v5.25c0 2.9 2.35 5.25 5.25 5.25h3a.75.75 0 000-1.5h-3a3.75 3.75 0 01-3.75-3.75V6.375z"
-          />
-          <path
-            v-if="isMuted"
-            d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z"
-          />
+      <button @click="toggleMute" class="control-btn" :class="{ active: isMuted }">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path v-if="!isMuted" d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
+          <path v-if="!isMuted"
+            d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
+          <path v-if="isMuted"
+            d="M10.5 1.875a1.125 1.125 0 012.25 0v8.25c0 .621-.504 1.125-1.125 1.125h-1.5a1.125 1.125 0 01-1.125-1.125v-8.25a1.125 1.125 0 011.125-1.125h1.5zm-4.5 4.5a.75.75 0 00-1.5 0v5.25c0 2.9 2.35 5.25 5.25 5.25h3a.75.75 0 000-1.5h-3a3.75 3.75 0 01-3.75-3.75V6.375z" />
+          <path v-if="isMuted" d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z" />
         </svg>
       </button>
       <!-- basculer entre l'affichage et le masquage de la vidéo -->
-      <button
-        @click="toggleVideo"
-        class="control-btn"
-        :class="{ active: isVideoOff }"
-        v-if="isVideoCall"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            v-if="!isVideoOff"
-            d="M4.5 4.5a3 3 0 00-3 3v9a3 3 0 003 3h8.25a3 3 0 003-3v-9a3 3 0 00-3-3H4.5zM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06z"
-          />
-          <path
-            v-if="isVideoOff"
-            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z"
-          />
+      <button @click="toggleVideo" class="control-btn" :class="{ active: isVideoOff }" v-if="isVideoCall">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path v-if="!isVideoOff"
+            d="M4.5 4.5a3 3 0 00-3 3v9a3 3 0 003 3h8.25a3 3 0 003-3v-9a3 3 0 00-3-3H4.5zM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06z" />
+          <path v-if="isVideoOff"
+            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z" />
         </svg>
       </button>
       <!-- mettre fin à l'appel -->
       <button @click="endCall" class="control-btn end-call">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            fill-rule="evenodd"
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd"
-          />
-          <path
-            fill-rule="evenodd"
-            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
-            clip-rule="evenodd"
-          />
+            clip-rule="evenodd" />
+          <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
+            clip-rule="evenodd" />
         </svg>
       </button>
       <!--enregistrer l'appel-->
@@ -177,38 +148,21 @@
     <div class="incoming-call-controls" v-if="callStatus === 'incoming'">
       <!-- accepter l'appel -->
       <button @click="acceptCall()" class="accept-btn">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            fill-rule="evenodd"
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd"
-          />
+            clip-rule="evenodd" />
         </svg>
         Accepter
       </button>
       <!-- rejeter l'appel -->
       <button @click="rejectCall" class="reject-btn">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            fill-rule="evenodd"
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd"
-          />
-          <path
-            fill-rule="evenodd"
-            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
-            clip-rule="evenodd"
-          />
+            clip-rule="evenodd" />
+          <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
+            clip-rule="evenodd" />
         </svg>
         Rejeter
       </button>
@@ -441,13 +395,11 @@ onMounted(() => {
       // Mettre à jour l'état de la vidéo distante
       remoteVideoEnabled.value = !data.off;
       console.log(
-        `L'utilisateur distant ${data.from} a ${
-          data.off ? "désactivé" : "activé"
+        `L'utilisateur distant ${data.from} a ${data.off ? "désactivé" : "activé"
         } sa caméra`
       );
     }
   });
-
 
   // Écouter l'événement toggle-audio
   props.socket.on("toggle-audio", (data) => {
@@ -456,13 +408,11 @@ onMounted(() => {
       // Mettre à jour l'état de la vidéo distante
       remoteAudioEnabled.value = !data.off;
       console.log(
-        `L'utilisateur distant ${data.from} a ${
-          data.off ? "désactivé" : "activé"
+        `L'utilisateur distant ${data.from} a ${data.off ? "désactivé" : "activé"
         } son micro`
       );
     }
   });
-
 
   // Si l'appel est sortant, démarrer l'appel
   if (props.callStatus === "outgoing" && props.remoteUserId) {
@@ -593,7 +543,11 @@ onUnmounted(() => {
  */
 const toggleMute = () => {
   isMuted.value = !isMuted.value;
-  WebRTCService.toggleAudio(isMuted.value, props.remoteUserId, props.currentUserId);
+  WebRTCService.toggleAudio(
+    isMuted.value,
+    props.remoteUserId,
+    props.currentUserId
+  );
 };
 
 const remoteVideoEnabled = ref(true);
