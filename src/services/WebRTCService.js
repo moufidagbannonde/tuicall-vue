@@ -379,11 +379,16 @@ class WebRTCService {
         }
     }
     // Toggle audio mute
-    async toggleAudio(mute) {
+    async toggleAudio(mute, remoteUserId, currentUserId) {
         if (this.localStream) {
             const audioTracks = this.localStream.getAudioTracks();
             if (audioTracks.length > 0) {
                 audioTracks[0].enabled = !mute;
+                this.socket.emit('toggle-audio', {
+                    to: remoteUserId,
+                    from: currentUserId || this.currentUserId, 
+                    off: mute 
+                });
             }
         }
     }
