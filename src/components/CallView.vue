@@ -182,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed,nextTick } from "vue";
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from "vue";
 import WebRTCService from "../services/WebRTCService";
 import { useToast } from "vue-toastification";
 import Peer from 'peerjs';
@@ -563,11 +563,23 @@ const initPeerJS = async () => {
           console.log('Flux de partage d\'écran reçu', incomingStream);
           console.log('Pistes vidéo:', incomingStream.getVideoTracks().length);
 
-          console.log("video ref",screenShareVideo.value )
+          // Activer l'affichage et attendre que l'élément soit créé
+          screenSharingActive.value = true;
+
+          // Attendre que l'élément soit créé avec un délai maximum
+          let attempts = 0;
+          const maxAttempts = 10;
+
+          while (!screenShareVideo.value && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+
+          console.log("video ref après attente:", screenShareVideo.value);
+
           if (!screenShareVideo.value) {
-            console.error('Élément vidéo non trouvé');
-            screenSharingActive.value = true;
-            await nextTick();
+            console.error('Élément vidéo non trouvé après plusieurs tentatives');
+            return;
           }
 
           // Arrêter l'ancien flux s'il existe
@@ -583,7 +595,6 @@ const initPeerJS = async () => {
             try {
               await screenShareVideo.value.play();
               console.log('Lecture du partage d\'écran démarrée avec succès');
-              screenSharingActive.value = true;
             } catch (error) {
               console.error('Erreur lors de la lecture:', error);
               setTimeout(playVideo, 1000);
@@ -595,7 +606,6 @@ const initPeerJS = async () => {
             playVideo();
           };
         });
-
         call.on('error', (error) => {
           console.error('Erreur sur l\'appel de partage d\'écran:', error);
         });
