@@ -951,33 +951,34 @@ const toggleVideo = () => {
   /* z-index: 100; */
 }
 
-.remote-stream-container {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.local-stream-container {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 200px; /* ou la taille souhaitée */
+  height: 150px;
+  z-index: 10;
+  border-radius: 8px;
   overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.remote-stream-container video {
+.local-stream-container video {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.local-stream-container {
+.remote-stream-container {
   position: absolute;
-  bottom: 80px;
-  right: 20px;
-  width: 150px;
-  height: 200px;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border: 2px solid white;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
 }
 
-.local-stream-container video {
+.remote-stream-container video {
   width: 100%;
   height: 100%;
   object-fit: cover;
