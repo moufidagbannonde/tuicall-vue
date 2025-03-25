@@ -20,9 +20,6 @@
     <div class="remote-stream-container" v-if="callStatus === 'connected'">
       <video ref="remoteVideo" autoplay playsinline :class="{ hidden: !isVideoCall }"
         :style="{ transform: 'scaleX(-1)' }"></video>
-      <template v-if="callStatus === 'outgoing' || callStatus === 'incoming'">
-        Appel en cours avec {{ currentUserId }}...
-      </template>
       <div class="remote-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
           <span
@@ -43,7 +40,7 @@
     <video v-if="screenSharingActive && !isScreenSharer" ref="screenShareVideo" :key="'screen-' + Date.now()" autoplay
       playsinline class="screen-share-video"></video>
     <!-- Affichage du flux de la vidéo localement -->
-    <div class="local-stream-container" v-if="localStream">
+    <div class="local-stream-container" v-if="callStatus === 'connected' || localStream">
       <video ref="localVideo" autoplay muted :class="{ hidden: !isVideoCall }"
         :style="{ transform: 'scaleX(-1)' }"></video>
       <div class="local-audio-indicator" v-if="!isVideoCall">
@@ -57,14 +54,17 @@
     </div>
 
     <!-- Indicateur du statut d'appel -->
-    <div class="call-status" v-if="callStatus !== 'connected'">
+    <div class="call-status">
       <div class="status-message text-center mt-5">
-        <template v-if="callStatus === 'outgoing' || callStatus === 'incoming'">
+        <template v-if="callStatus === 'outgoing'">
           Appel en cours avec {{ remoteUserId }}...
         </template>
-        <!-- <template v-else-if="callStatus === 'incoming'">
-        Appel entrant de {{ remoteUserId }}
-      </template> -->
+        <template v-else-if="callStatus === 'incoming'">
+          Appel entrant de {{ remoteUserId }}...
+        </template>
+        <template v-else-if="callStatus === 'connected'">
+          En appel avec {{ remoteUserId }}
+        </template>
       </div>
     </div>
 
@@ -326,6 +326,15 @@ const startOutgoingCall = async () => {
     await WebRTCService.makeCall(
       props.remoteUserId,
       !result.fallbackToAudio && localIsVideoCall.value
+    );
+
+    // Mettre à jour le statut après que l'appel est établi
+    currentCallStatus.value = "connected";
+    emit(
+      "call-status-change",
+      "connected",
+      props.remoteUserId,
+      localIsVideoCall.value
     );
   } catch (error) {
     // En cas d'erreur lors de l'initialisation de l'appel, afficher un message d'erreur
@@ -713,6 +722,8 @@ const stopScreenShare = async () => {
     isScreenSharer.value = false;
     screenSharingActive.value = false;
 
+    await nextTick();
+
     // Notify remote peer
     if (remotePeerConnection.value && remotePeerConnection.value.open) {
       remotePeerConnection.value.send({
@@ -783,16 +794,22 @@ const sendScreenStream = (screenStream) => {
  */
 const acceptCall = async () => {
   try {
+    // Obtenir le flux local
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
     if (!result.success) {
       throw result.error;
     }
+
+    // Sauvegarder et afficher le flux local
     localStream.value = result.stream;
+    if (localVideo.value) {
+      localVideo.value.srcObject = result.stream;
+    }
 
-    // Accepter l'appel d'abord
-    await WebRTCService.acceptCall();
+    // Accepter l'appel et envoyer notre flux local
+    await WebRTCService.acceptCall(result.stream);
 
-    // Mettre à jour le statut et émettre l'événement avec tous les paramètres
+    // Mettre à jour le statut
     currentCallStatus.value = "connected";
     emit(
       "call-status-change",
@@ -800,6 +817,15 @@ const acceptCall = async () => {
       props.remoteUserId,
       localIsVideoCall.value
     );
+
+    // Configurer la gestion du flux distant
+    WebRTCService.onRemoteStream((remoteStream) => {
+      if (remoteVideo.value) {
+        remoteVideo.value.srcObject = remoteStream;
+        remoteStream.value = remoteStream;
+      }
+    });
+
   } catch (error) {
     console.error("Failed to accept call:", error);
     emit("call-ended");
@@ -920,10 +946,8 @@ const toggleVideo = () => {
   width: 80%;
   height: 80%;
   object-fit: contain;
-  background-color: rgba(0, 0, 0, 0.9);
   border-radius: 12px;
-  border: 2px solid #4f46e5;
-  z-index: 100;
+  /* z-index: 100; */
 }
 
 .remote-stream-container {
