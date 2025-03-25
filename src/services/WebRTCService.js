@@ -168,42 +168,50 @@ class WebRTCService {
     // écouteurs d'événements pour la signalisation WebRTC
     async setupSocketListeners() {
         if (!this.socket) return;
+    
+        // Stocker les candidats ICE en attente
+        this.pendingCandidates = [];
 
         this.socket.on('call-offer', async (data) => {
             if (data.to === this.currentUserId) {
                 console.log('Received call offer:', data);
-                // Set the remoteUserId when receiving the offer
                 this.remoteUserId = data.from;
                 this.isVideoEnabled = data.withVideo;
                 this.pendingOffer = data.offer;
-
+    
+                // Déclencher la confirmation d'appel
                 if (this.onCallStatusChangeCallback) {
                     this.onCallStatusChangeCallback('incoming', data.from, data.withVideo);
                 }
             }
         });
 
-        //Réponse à l'appel
-        this.socket.on('call-answer', async (data) => {
-            if (data.to === this.currentUserId) {
-                console.log('Received call answer:', data);
+        this.socket.on('ice-candidate', async (data) => {
+            if (data.to === this.currentUserId && this.peerConnection) {
                 try {
-                    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    console.log('Remote description set successfully');
+                    if (this.peerConnection.remoteDescription) {
+                        await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    } else {
+                        this.pendingCandidates.push(data.candidate);
+                    }
                 } catch (error) {
-                    console.error('Error setting remote description:', error);
+                    console.error('Error handling ICE candidate:', error);
                 }
             }
         });
 
-        // ICE candidates
-        this.socket.on('ice-candidate', async (data) => {
-            if (data.to === this.currentUserId && this.peerConnection) {
+        this.socket.on('call-answer', async (data) => {
+            if (data.to === this.currentUserId) {
                 try {
-                    await this.peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    console.log('Added ICE candidate successfully');
+                    await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    
+                    // Ajouter les candidats ICE en attente après la description distante
+                    for (const candidate of this.pendingCandidates) {
+                        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                    this.pendingCandidates = [];
                 } catch (error) {
-                    console.error('Error adding ICE candidate:', error);
+                    console.error('Error in call-answer:', error);
                 }
             }
         });
@@ -293,9 +301,7 @@ class WebRTCService {
                 throw new Error('No pending offer to accept');
             }
 
-            console.log('Current remote user:', this.remoteUserId); // Add this log
-            this.isCallActive = true;
-
+            // Obtenir le flux local avant d'initialiser la connexion
             if (!this.localStream) {
                 const mediaResult = await this.getLocalMedia(this.isVideoEnabled);
                 if (!mediaResult.success) {
@@ -303,26 +309,35 @@ class WebRTCService {
                 }
             }
 
+            // Initialiser la connexion peer après avoir obtenu le flux local
             this.initPeerConnection();
 
+            // Définir la description distante
             console.log('Setting remote description from pending offer');
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingOffer));
 
+            // Créer et envoyer la réponse
             console.log('Creating answer');
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
 
-            if (!this.remoteUserId) {
-                throw new Error('Remote user ID not set');
+            // Ajouter les candidats ICE en attente
+            if (this.pendingCandidates && this.pendingCandidates.length > 0) {
+                console.log('Adding pending ICE candidates:', this.pendingCandidates.length);
+                for (const candidate of this.pendingCandidates) {
+                    await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                }
+                this.pendingCandidates = [];
             }
 
+            this.isCallActive = true;
             this.socket.emit('call-answer', {
                 answer: answer,
                 to: this.remoteUserId,
                 from: this.currentUserId,
                 withVideo: this.isVideoEnabled
             });
-            console.log("méthode emit surpassée")
+
             return true;
         } catch (error) {
             console.error('Error accepting call:', error);

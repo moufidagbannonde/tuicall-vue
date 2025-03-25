@@ -18,7 +18,8 @@
 
     <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container" v-if="callStatus === 'connected'">
-      <video ref="remoteVideo" autoplay :class="{ hidden: !isVideoCall }" :style="{ transform: 'scaleX(-1)' }"></video>
+      <video ref="remoteVideo" autoplay playsinline :class="{ hidden: !isVideoCall }"
+        :style="{ transform: 'scaleX(-1)' }"></video>
       <template v-if="callStatus === 'outgoing' || callStatus === 'incoming'">
         Appel en cours avec {{ currentUserId }}...
       </template>
@@ -38,6 +39,9 @@
       </div>
     </div>
 
+    <!-- flux de partage d'écran -->
+    <video v-if="screenSharingActive && !isScreenSharer" ref="screenShareVideo" :key="'screen-' + Date.now()" autoplay
+      playsinline class="screen-share-video"></video>
     <!-- Affichage du flux de la vidéo localement -->
     <div class="local-stream-container" v-if="localStream">
       <video ref="localVideo" autoplay muted :class="{ hidden: !isVideoCall }"
@@ -125,6 +129,13 @@
             d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z" />
         </svg>
       </button>
+      <!-- partager l'écran -->
+      <button @click="startScreenShare" class="control-btn" v-if="currentCallStatus === 'connected'">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path
+            d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm8 3l4 4h-3v4h-2v-4H8l4-4z" />
+        </svg>
+      </button>
       <!-- mettre fin à l'appel -->
       <button @click="endCall" class="control-btn end-call">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
@@ -171,9 +182,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from "vue";
+import { ref, onMounted, onUnmounted, watch, computed,nextTick } from "vue";
 import WebRTCService from "../services/WebRTCService";
 import { useToast } from "vue-toastification";
+import Peer from 'peerjs';
+
+
 
 /**
  * transfert de flux d'audio ou vidéo
@@ -188,6 +202,13 @@ const props = defineProps({
   callStatus: String,
   isIncoming: Boolean,
 });
+
+const peerConnection = ref(null);
+const remotePeerConnection = ref(null);
+const screenSharingActive = ref(false);
+const screenShareVideo = ref(null);
+
+
 // événements à émettre
 const emit = defineEmits([
   "call-ended",
@@ -374,7 +395,7 @@ const handleCallStatusChange = (status, userId, withVideo) => {
  *  fonction  appelée lorsque le composant est monté.
  *  initialise le service WebRTC et démarre l'appel sortant si nécessaire.
  */
-onMounted(() => {
+onMounted(async () => {
   // Initialiser le type d'appel (vidéo ou audio) à partir des propriétés du composant
   localIsVideoCall.value = props.isVideoCall;
   // Initialiser l'état actuel de l'appel à partir des propriétés du composant
@@ -384,9 +405,63 @@ onMounted(() => {
   WebRTCService.init(
     props.socket,
     props.currentUserId,
-    handleRemoteStream,
+    (remoteStream) => {
+      if (remoteVideo.value) {
+        remoteVideo.value.srcObject = remoteStream;
+        // Utiliser la même logique que pour la vidéo locale
+        if (remoteVideo.value && remoteStream) {
+          remoteVideo.value.srcObject = remoteStream;
+          remoteVideo.value.onloadedmetadata = async () => {
+            try {
+              await remoteVideo.value.play();
+              console.log('Remote video playing successfully');
+            } catch (error) {
+              console.warn('Failed to play remote video:', error);
+            }
+          };
+        }
+      }
+    },
     handleCallStatusChange
   );
+
+  // Modifier le watch pour éviter les lectures multiples
+  watch([localVideo, remoteVideo, localStream, remoteStream], () => {
+    if (localVideo.value && localStream.value) {
+      localVideo.value.srcObject = localStream.value;
+    }
+    // Ne pas tenter de lire automatiquement le flux distant ici
+    if (remoteVideo.value && remoteStream.value && !remoteVideo.value.srcObject) {
+      remoteVideo.value.srcObject = remoteStream.value;
+    }
+  });
+
+  // Initialiser PeerJS
+  try {
+    await initPeerJS();
+    console.log('PeerJS initialisé au montage');
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation de PeerJS au montage:', error);
+  }
+
+
+  // Écouter l'événement screen-share-started
+  props.socket.on("screen-share-started", (data) => {
+    console.log("Réception de l'événement screen-share-started:", data);
+    if (data.from === props.remoteUserId) {
+      toast.info(`${props.remoteUserId} a commencé à partager son écran`);
+      console.log(`L'utilisateur distant ${data.from} a commencé à partager son écran`);
+    }
+  });
+
+  // Écouter l'événement screen-share-stopped
+  props.socket.on("screen-share-stopped", (data) => {
+    console.log("Réception de l'événement screen-share-stopped:", data);
+    if (data.from === props.remoteUserId) {
+      toast.info(`${props.remoteUserId} a arrêté de partager son écran`);
+      console.log(`L'utilisateur distant ${data.from} a arrêté de partager son écran`);
+    }
+  });
 
   // Écouter l'événement toggle-video
   props.socket.on("toggle-video", (data) => {
@@ -444,8 +519,254 @@ watch([localVideo, remoteVideo, localStream, remoteStream], () => {
   // Si l'élément vidéo distant et le flux distant sont disponibles, les attacher
   if (remoteVideo.value && remoteStream.value) {
     remoteVideo.value.srcObject = remoteStream.value;
+    remoteVideo.value.onloadedmetadata = async () => {
+      try {
+        await remoteVideo.value.play();
+      } catch (error) {
+        console.warn('Failed to play remote video in watch:', error);
+      }
+    };
   }
 });
+
+const isScreenSharer = ref(false);
+
+watch(screenShareVideo, (newVal) => {
+  if (newVal) {
+    console.log('Élément vidéo de partage d\'écran initialisé:', newVal);
+  }
+});
+
+const initPeerJS = async () => {
+  try {
+    return new Promise((resolve, reject) => {
+      peerConnection.value = new Peer(props.currentUserId, {
+        debug: 2,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        }
+      });
+
+      peerConnection.value.on('open', () => {
+        console.log('PeerJS initialisé avec succès, ID:', props.currentUserId);
+        resolve();
+      });
+      peerConnection.value.on('call', (call) => {
+        console.log('Appel entrant pour le partage d\'écran reçu');
+        // Répondre automatiquement à l'appel de partage d'écran
+        call.answer();
+        // Gérer le flux entrant
+        call.on('stream', async (incomingStream) => {
+          console.log('Flux de partage d\'écran reçu', incomingStream);
+          console.log('Pistes vidéo:', incomingStream.getVideoTracks().length);
+
+          console.log("video ref",screenShareVideo.value )
+          if (!screenShareVideo.value) {
+            console.error('Élément vidéo non trouvé');
+            screenSharingActive.value = true;
+            await nextTick();
+          }
+
+          // Arrêter l'ancien flux s'il existe
+          if (screenShareVideo.value.srcObject) {
+            screenShareVideo.value.srcObject.getTracks().forEach(track => track.stop());
+          }
+
+          // Attacher le nouveau flux
+          screenShareVideo.value.srcObject = incomingStream;
+
+          // Forcer la lecture avec retry
+          const playVideo = async () => {
+            try {
+              await screenShareVideo.value.play();
+              console.log('Lecture du partage d\'écran démarrée avec succès');
+              screenSharingActive.value = true;
+            } catch (error) {
+              console.error('Erreur lors de la lecture:', error);
+              setTimeout(playVideo, 1000);
+            }
+          };
+
+          screenShareVideo.value.onloadedmetadata = () => {
+            console.log('Métadonnées chargées, tentative de lecture');
+            playVideo();
+          };
+        });
+
+        call.on('error', (error) => {
+          console.error('Erreur sur l\'appel de partage d\'écran:', error);
+        });
+      });
+
+      peerConnection.value.on('error', (err) => {
+        console.error('Erreur PeerJS:', err);
+        reject(err);
+      });
+
+      // Gestion des connexions entrantes
+      peerConnection.value.on('connection', (conn) => {
+        console.log('Nouvelle connexion entrante:', conn);
+        remotePeerConnection.value = conn;
+
+        conn.on('data', (data) => {
+          console.log('Données reçues du pair:', data);
+          if (data.type === 'screen-share-stopped') {
+            toast.info(`${props.remoteUserId} a arrêté de partager son écran`);
+          }
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Échec de l\'initialisation de PeerJS:', error);
+    throw error;
+  }
+};
+
+const startScreenShare = async () => {
+  try {
+    console.log('Démarrage du partage d\'écran avec PeerJS...');
+
+    if (!peerConnection.value) {
+      console.error('PeerJS not initialized');
+      toast.error('Erreur d\'initialisation pour le partage d\'écran');
+      await initPeerJS();
+    }
+
+    // Get screen sharing stream
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: false
+    });
+    console.log('Flux de partage d\'écran obtenu');
+
+    // Afficher le flux de partage d'écran dans le nouvel élément vidéo
+    if (screenShareVideo.value) {
+      screenShareVideo.value.srcObject = screenStream;
+    }
+
+    // Connect to remote peer if not already connected
+    if (!remotePeerConnection.value) {
+      console.log('Establishing connection to remote peer:', props.remoteUserId);
+      remotePeerConnection.value = peerConnection.value.connect(props.remoteUserId);
+
+      // Wait for connection to open
+      remotePeerConnection.value.on('open', () => {
+        console.log('Connection to remote peer established');
+        sendScreenStream(screenStream);
+      });
+    } else {
+      sendScreenStream(screenStream);
+    }
+
+    // Handle stream ending
+    screenStream.getVideoTracks()[0].onended = () => {
+      console.log('Screen sharing ended by user');
+      stopScreenShare();
+    };
+
+    isScreenSharer.value = true;
+    screenSharingActive.value = true;
+
+    // Notify via socket
+    props.socket.emit('screen-share-started', {
+      from: props.currentUserId,
+      to: props.remoteUserId
+    });
+
+    toast.success('Partage d\'écran démarré');
+  } catch (error) {
+    console.error("Erreur lors du partage d'écran:", error);
+    toast.error("Impossible de partager l'écran. Veuillez réessayer.");
+  }
+};
+
+const screenShareCall = ref(null);
+
+const stopScreenShare = async () => {
+  try {
+    console.log('Stopping screen share');
+
+    // Arrêter le partage d'écran
+    if (screenShareVideo.value && screenShareVideo.value.srcObject) {
+      screenShareVideo.value.srcObject.getTracks().forEach(track => track.stop());
+      screenShareVideo.value.srcObject = null;
+    }
+
+    // Fermer l'appel de partage d'écran
+    if (screenShareCall.value) {
+      screenShareCall.value.close();
+      screenShareCall.value = null;
+    }
+    isScreenSharer.value = false;
+    screenSharingActive.value = false;
+
+    // Notify remote peer
+    if (remotePeerConnection.value && remotePeerConnection.value.open) {
+      remotePeerConnection.value.send({
+        type: 'screen-share-stopped',
+        from: props.currentUserId
+      });
+    }
+
+    // Notify via socket
+    props.socket.emit('screen-share-stopped', {
+      from: props.currentUserId,
+      to: props.remoteUserId
+    });
+
+    toast.info('Partage d\'écran arrêté');
+  } catch (error) {
+    console.error("Erreur lors de l'arrêt du partage d'écran:", error);
+    toast.error("Erreur lors de l'arrêt du partage d'écran");
+  }
+};
+
+const sendScreenStream = (screenStream) => {
+  try {
+    console.log('Tentative d\'envoi du flux de partage d\'écran à:', props.remoteUserId);
+
+    if (!props.remoteUserId) {
+      throw new Error('ID du pair distant non défini');
+    }
+
+    // Créer l'appel avec le flux d'écran
+    const call = peerConnection.value.call(props.remoteUserId, screenStream, {
+      metadata: { type: 'screen-share' },
+      sdpTransform: (sdp) => {
+        // Forcer une meilleure qualité vidéo
+        return sdp.replace('useinbandfec=1', 'useinbandfec=1;stereo=1;maxaveragebitrate=510000');
+      }
+    });
+
+
+    call.on('error', (err) => {
+      console.error('Erreur lors de l\'appel de partage d\'écran:', err);
+      toast.error('Erreur lors du partage d\'écran');
+    });
+
+    call.on('stream', (remoteStream) => {
+      console.log('Flux de partage d\'écran connecté');
+    });
+
+    // Sauvegarder l'appel pour pouvoir le fermer plus tard
+    screenShareCall.value = call;
+
+    // Notification via data connection
+    if (remotePeerConnection.value && remotePeerConnection.value.open) {
+      remotePeerConnection.value.send({
+        type: 'screen-share-started',
+        from: props.currentUserId
+      });
+    }
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi du flux de partage d\'écran:', error);
+    toast.error('Erreur lors du partage d\'écran');
+  }
+};
+
 
 /**
  *  tente d'obtenir le média local (audio et/ou vidéo) et de démarrer l'appel une fois la configuration terminée.
@@ -536,6 +857,10 @@ onUnmounted(() => {
   if (WebRTCService.onMediaStateChange) {
     WebRTCService.onMediaStateChange = null;
   }
+  if (peerConnection.value) {
+    peerConnection.value.destroy();
+    peerConnection.value = null;
+  }
 });
 
 /**
@@ -575,6 +900,20 @@ const toggleVideo = () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.screen-share-video {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  background-color: rgba(0, 0, 0, 0.9);
+  border-radius: 12px;
+  border: 2px solid #4f46e5;
+  z-index: 100;
 }
 
 .remote-stream-container {
