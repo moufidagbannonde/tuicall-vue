@@ -13,7 +13,7 @@
     </div>
     <!-- chrono pour indiquer la durée d'appel -->
     <!-- <div class="call-timer mt-3">
-    {{ formattedCallDuration }}
+     {{ formattedCallDuration }}
   </div> -->
 
     <!-- Affichage du flux audio/vidéo -->
@@ -370,24 +370,32 @@ const handleRemoteStream = (stream) => {
  * @param {string} userId - L'identifiant de l'utilisateur concerné par le changement de statut.
  * @param {boolean} withVideo - Indique si l'appel est vidéo ou audio.
  */
-const handleCallStatusChange = (status, userId, withVideo) => {
+ const handleCallStatusChange = (status, userId, withVideo) => {
   console.log("Call status changed:", status);
   currentCallStatus.value = status;
 
   // Démarrer le timer quand l'appel est connecté
   if (status === "connected") {
     console.log("Starting timer for status:", status);
+    
     // S'assurer qu'il n'y a pas déjà un timer en cours
     if (timerInterval.value) {
+      console.log("Clearing existing timer");
       clearInterval(timerInterval.value);
     }
 
+    // Initialiser le temps de départ et la durée
     callStartTime.value = Date.now();
+    callDuration.value = 0;
+
+    // Créer un nouveau timer
     timerInterval.value = setInterval(() => {
-      callDuration.value = Math.floor(
-        (Date.now() - callStartTime.value) / 1000
-      );
+      const elapsed = Date.now() - callStartTime.value;
+      callDuration.value = Math.floor(elapsed / 1000);
+      console.log("Timer tick:", callDuration.value);
     }, 1000);
+
+    console.log("New timer interval created:", timerInterval.value);
   } else if (status === "ended" || status === "rejected") {
     // Arrêter le timer si l'appel est terminé ou rejeté
     if (timerInterval.value) {
@@ -401,11 +409,18 @@ const handleCallStatusChange = (status, userId, withVideo) => {
   emit("call-status-change", status, userId, withVideo);
 };
 
+// Ajout d'un watcher pour déboguer callDuration
+watch(callDuration, (newValue) => {
+  console.log("Call duration changed:", newValue);
+  console.log("Formatted duration:", formattedCallDuration.value);
+});
+
 /**
  *  fonction  appelée lorsque le composant est monté.
  *  initialise le service WebRTC et démarre l'appel sortant si nécessaire.
  */
 onMounted(async () => {
+  console.log(`${Math.floor(callDuration.value / 60).toString().padStart(2, '0')}`,`${(callDuration.value % 60).toString().padStart(2, '0')}`) 
   // Initialiser le type d'appel (vidéo ou audio) à partir des propriétés du composant
   localIsVideoCall.value = props.isVideoCall;
   // Initialiser l'état actuel de l'appel à partir des propriétés du composant
@@ -951,34 +966,33 @@ const toggleVideo = () => {
   /* z-index: 100; */
 }
 
-.local-stream-container {
-  position: absolute;
-  bottom: 20px;
-  right: 20px;
-  width: 200px; /* ou la taille souhaitée */
-  height: 150px;
-  z-index: 10;
-  border-radius: 8px;
+.remote-stream-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.local-stream-container video {
+.remote-stream-container video {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.remote-stream-container {
+.local-stream-container {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
+  bottom: 80px;
+  right: 20px;
+  width: 150px;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 2px solid white;
 }
 
-.remote-stream-container video {
+.local-stream-container video {
   width: 100%;
   height: 100%;
   object-fit: cover;
