@@ -352,12 +352,25 @@ const startOutgoingCall = async () => {
  * @param {MediaStream} stream - Le flux vidéo/audio distant à afficher.
  */
 const handleRemoteStream = (stream) => {
+  console.log('Remote stream received:', stream);
+  console.log('Remote stream tracks:', stream.getTracks());
   // Mettre à jour la valeur du flux distant
   remoteStream.value = stream;
 
   // Si l'élément vidéo distant existe, l'afficher
   if (remoteVideo.value) {
+    console.log('Attaching stream to remote video element');
     remoteVideo.value.srcObject = stream;
+    remoteVideo.value.onloadedmetadata = async () => {
+      try {
+        await remoteVideo.value.play();
+        console.log('Remote video playing successfully');
+      } catch (error) {
+        console.error('Failed to play remote video:', error);
+      }
+    };
+  } else {
+    console.error('Remote video element not found');
   }
 };
 
@@ -796,12 +809,14 @@ const acceptCall = async () => {
   try {
     // Obtenir le flux local
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
+    console.log('Local media result:', result);
     if (!result.success) {
       throw result.error;
     }
 
     // Sauvegarder et afficher le flux local
     localStream.value = result.stream;
+    console.log('Local stream tracks:', localStream.value.getTracks());
     if (localVideo.value) {
       localVideo.value.srcObject = result.stream;
     }
@@ -809,6 +824,7 @@ const acceptCall = async () => {
     // Accepter l'appel et envoyer notre flux local
     await WebRTCService.acceptCall(result.stream);
 
+    console.log('Call accepted, waiting for remote stream');
     // Mettre à jour le statut
     currentCallStatus.value = "connected";
     emit(
@@ -820,12 +836,9 @@ const acceptCall = async () => {
 
     // Configurer la gestion du flux distant
     WebRTCService.onRemoteStream((remoteStream) => {
-      if (remoteVideo.value) {
-        remoteVideo.value.srcObject = remoteStream;
-        remoteStream.value = remoteStream;
-      }
+      console.log('Remote stream callback triggered');
+      handleRemoteStream(remoteStream);
     });
-
   } catch (error) {
     console.error("Failed to accept call:", error);
     emit("call-ended");
