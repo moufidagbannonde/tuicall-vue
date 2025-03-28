@@ -17,7 +17,7 @@
 
     <div v-if="!isInCall && currentUserId" class="controls-container">
       <h1 class="app-title"> WebRTC Call</h1>
-      <CallControls @call-initiated="handleCallInitiation" />
+       <CallControls @call-initiated="handleCallInitiation" /> 
       <div class="user-id-display">
         <p>Votre ID: <span class="user-id">{{ currentUserId }}</span></p>
         <p class="help-text">Partagez cet ID avec vos contacts pour qu'ils puissent vous appeler</p>
@@ -26,7 +26,7 @@
     <!-- Call View (quand l'appel) -->
     <CallView v-if="isInCall" :socket="socket" :current-user-id="currentUserId" :remote-user-id="remoteUserId"
       :is-video-call="isVideoCall" :call-status="callStatus" :is-incoming="isIncomingCall" @call-ended="handleCallEnded"
-      @call-status-change="handleCallStatusChange" @video-disabled="handleVideoDisabled" :is-agent="userRole === 'agent'" />
+      @call-status-change="handleCallStatusChange" @video-disabled="handleVideoDisabled" />
     <!-- Incoming Call Modal -->
     <div v-if="callStatus === 'incoming'"
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -88,7 +88,6 @@ import CallView from './components/CallView.vue';
 import WebRTCService from './services/WebRTCService';
 import CryptoJS from 'crypto-js';
 
-const userRole = ref('');
 // Generate a random user ID
 const generateUserId = () => {
   return 'user_' + Math.random().toString(36).substr(2, 9);
@@ -153,7 +152,6 @@ onMounted(() => {
   clientId.value = decryptData(urlParams.get('clientId'));
   const role = urlParams.get('role');
   
-  userRole.value = urlParams.get('role');
   console.log('Paramètres URL détectés:', { agentId: agentId.value, clientId: clientId.value, role });
   
   if (agentId.value && role === "agent") {
