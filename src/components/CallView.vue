@@ -16,17 +16,31 @@
       </span>
     </div>
     <!-- chrono pour indiquer la durée d'appel (à commencer du moment où l'appel a commencé)-->
-    <div class="call-timer mt-3">
-    {{ formattedCallDuration }}
-  </div>
+    <div class="call-timer mt-3" v-if="currentCallStatus === 'connected'">
+      {{ formattedCallDuration }}
+    </div>
 
+    <!-- Indicateur du statut d'appel -->
+    <div class="call-status">
+      <div class="status-message text-center mt-5">
+        <template v-if="currentCallStatus === 'outgoing'">
+          Appel en cours avec {{ remoteUserId }}...
+        </template>
+        <template v-else-if="currentCallStatus === 'incoming'">
+          Appel entrant de {{ remoteUserId }}...
+        </template>
+        <template v-else-if="currentCallStatus === 'connected'">
+          En appel avec {{ remoteUserId }}
+        </template>
+      </div>
+    </div>
     <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container">
       <video
         v-if="remoteStream"
         id="remoteVideo"
         autoplay
-        playsinline        
+        playsinline
         :muted="false"
         :volume="1.0"
         :style="{ transform: 'scaleX(-1)' }"
@@ -96,21 +110,6 @@
             {{ currentUserId.charAt(0).toUpperCase() }}
           </span>
         </div>
-      </div>
-    </div>
-
-    <!-- Indicateur du statut d'appel -->
-    <div class="call-status">
-      <div class="status-message text-center mt-5">
-        <template v-if="currentCallStatus === 'outgoing'">
-          Appel en cours avec {{ remoteUserId }}...
-        </template>
-        <template v-else-if="currentCallStatus === 'incoming'">
-          Appel entrant de {{ remoteUserId }}...
-        </template>
-        <template v-else-if="currentCallStatus === 'connected'">
-          En appel avec {{ remoteUserId }}
-        </template>
       </div>
     </div>
 
@@ -1469,5 +1468,19 @@ const toggleVideo = () => {
   border-radius: 15px;
   font-size: 1.2rem;
   font-weight: bold;
+}
+.call-status {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.status-message {
+  color: white;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 1.2rem;
 }
 </style>
