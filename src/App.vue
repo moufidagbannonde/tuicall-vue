@@ -172,49 +172,40 @@ const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs e
  * @param {string} encryptedData - The encrypted data in format "iv:encryptedText"
  * @returns {string} - The decrypted text
  */
-function decryptData(encryptedData) {
+ function decryptData(encryptedData) {
   try {
-    if (!encryptedData) return null;
-
-    // Utiliser la clé secrète du chiffrement
-    const secretKey = "catarina-secure-key-2025";
-    const key = CryptoJS.enc.Utf8.parse(secretKey.padEnd(32).slice(0, 32)); //  32 octets
-
-    // Séparer l'IV et le texte chiffré
-    const [ivHex, encryptedText] = encryptedData.split(":");
-
-    // Log des données séparées
-    console.log("IV Hex:", ivHex);
-    console.log("Encrypted Text:", encryptedText);
-
-    if (!ivHex || !encryptedText) {
-      console.error("Invalid encrypted data format");
+    // Check if encryptedData is null or undefined
+    if (!encryptedData) {
+      console.warn('No encrypted data provided for decryption');
       return null;
     }
-
-    // Convertir l'IV hexadécimal en WordArray
-    const iv = CryptoJS.enc.Hex.parse(ivHex);
-
-    // Déchiffrer les données
-    const decrypted = CryptoJS.AES.decrypt(encryptedText, key, {
-      iv: iv,
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7,
-    });
-
-    // Log du résultat du déchiffrement
-    const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
-    console.log("Decrypted Text:", decryptedText);
-
-    // Vérification si le texte déchiffré est vide ou non
-    if (!decryptedText) {
-      console.error("Decrypted text is empty. Something went wrong with the decryption.");
-      return null;
-    }
-
-    return decryptedText;
+    
+    const secretKey = 'catarina-secure-key-2025';
+    // Use the same fixed salt as on the server
+    const fixedSalt = 'catarina2025salt';
+    
+    // Create the same IV using MD5
+    const iv = CryptoJS.MD5(fixedSalt).toString();
+    const ivWordArray = CryptoJS.enc.Hex.parse(iv.substring(0, 32));
+    
+    // Create the same key using SHA-256
+    const keyWordArray = CryptoJS.SHA256(secretKey);
+    
+    // Decrypt the data
+    const ciphertext = CryptoJS.enc.Hex.parse(encryptedData);
+    const decrypted = CryptoJS.AES.decrypt(
+      { ciphertext: ciphertext },
+      keyWordArray,
+      { 
+        iv: ivWordArray,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      }
+    );
+    
+    return decrypted.toString(CryptoJS.enc.Utf8);
   } catch (error) {
-    console.error("Failed to decrypt data:", error);
+    console.error('Decryption error:', error);
     return null;
   }
 }
@@ -224,6 +215,14 @@ function decryptData(encryptedData) {
  */
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search);
+  console.log("param URL", urlParams)
+
+    // Log all parameters individually
+    console.log("Raw parameters:");
+  for (const [key, value] of urlParams.entries()) {
+    console.log(`${key}: ${value}`);
+  }
+  
   agentId.value = decryptData(urlParams.get("agentId"));
   clientId.value = decryptData(urlParams.get("clientId"));
   const role = urlParams.get("role");
