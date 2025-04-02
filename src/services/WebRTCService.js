@@ -12,23 +12,70 @@ class WebRTCService {
         this.onCallStatusChangeCallback = null;
         this.mediaRecorder = null;
         this.recordedChunks = [];
+        this.onIceCandidateCallback = null;
 
         // Configuration STUN/TURN servers
         this.configuration = {
-            "iceServers": [
-                { urls: 'stun:stun2.l.google.com:19302' },
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                {
+                    urls: 'turn:relay.metered.ca:80',
+                    username: 'f9b1a6e0a6a6a6a6a6a6a6a6',
+                    credential: 'f9b1a6e0a6a6a6a6a6a6a6a6'
+                },
+                {
+                    urls: 'turn:relay.metered.ca:443',
+                    username: 'f9b1a6e0a6a6a6a6a6a6a6a6',
+                    credential: 'f9b1a6e0a6a6a6a6a6a6a6a6'
+                }
             ]
         };
+    }
+
+    debugRemoteStream(stream) {
+        if (!stream) {
+            console.error('Le flux distant est null ou undefined');
+            return;
+        }
+
+        console.log('Détails du flux distant:');
+        console.log('- ID du flux:', stream.id);
+        console.log('- Flux actif:', stream.active);
+
+        const videoTracks = stream.getVideoTracks();
+        console.log('- Pistes vidéo:', videoTracks.length);
+        videoTracks.forEach((track, index) => {
+            console.log(`  Piste vidéo ${index}:`, {
+                id: track.id,
+                enabled: track.enabled,
+                muted: track.muted,
+                readyState: track.readyState
+            });
+        });
+
+        const audioTracks = stream.getAudioTracks();
+        console.log('- Pistes audio:', audioTracks.length);
+        audioTracks.forEach((track, index) => {
+            console.log(`  Piste audio ${index}:`, {
+                id: track.id,
+                enabled: track.enabled,
+                muted: track.muted,
+                readyState: track.readyState
+            });
+        });
     }
 
     /**
      * initialiser la connexion P2P (Peer-To-Peer)
      */
     initPeerConnection() {
+        console.log('Initialisation de la connexion peer-to-peer');
         this.peerConnection = new RTCPeerConnection(this.configuration);
 
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate && this.socket && this.remoteUserId) {
+                console.log('ICE candidate généré:', event.candidate);
                 this.socket.emit('ice-candidate', {
                     candidate: event.candidate,
                     to: this.remoteUserId,
@@ -37,25 +84,68 @@ class WebRTCService {
             }
         };
 
+
         this.peerConnection.ontrack = (event) => {
+            console.log('Flux distant reçu:', event.streams[0]);
             this.remoteStream = event.streams[0];
+
+            // Déboguer le flux distant
+            this.debugRemoteStream(this.remoteStream);
+
             if (this.onRemoteStreamCallback) {
+                console.log('Appel du callback onRemoteStreamCallback avec le flux distant');
                 this.onRemoteStreamCallback(this.remoteStream);
+            } else {
+                console.warn('Aucun callback onRemoteStreamCallback défini pour gérer le flux distant');
             }
         };
 
+        // Ajouter un gestionnaire d'événements pour la connexion
+        this.peerConnection.onconnectionstatechange = (event) => {
+            console.log('État de la connexion peer:', this.peerConnection.connectionState);
+        };
+
+        // Ajouter un gestionnaire d'événements pour l'état de la signalisation
+        this.peerConnection.onsignalingstatechange = (event) => {
+            console.log('État de la signalisation:', this.peerConnection.signalingState);
+        };
+
+        // Ajouter un gestionnaire d'événements pour l'état de la connexion ICE
+        this.peerConnection.oniceconnectionstatechange = (event) => {
+            console.log('État de la connexion ICE:', this.peerConnection.iceConnectionState);
+        };
+
+        // Ajouter les pistes du flux local si disponible
         if (this.localStream) {
+            console.log('Ajout des pistes du flux local à la connexion peer');
             this.localStream.getTracks().forEach(track => {
                 this.peerConnection.addTrack(track, this.localStream);
             });
         }
     }
 
+
+    /**
+ * Définit un callback pour les candidats ICE reçus
+ * @param {function} callback - Fonction à appeler quand un candidat ICE est reçu
+ */
+    setOnIceCandidateCallback(callback) {
+        this.onIceCandidateCallback = callback;
+    }
+
     async getLocalMedia(withVideo) {
         try {
             const constraints = {
-                audio: true,
-                video: withVideo
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                },
+                video: withVideo ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                } : false
             };
 
             this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -167,7 +257,7 @@ class WebRTCService {
     // écouteurs d'événements pour la signalisation WebRTC
     async setupSocketListeners() {
         if (!this.socket) return;
-    
+
         // Stocker les candidats ICE en attente
         this.pendingCandidates = [];
 
@@ -177,7 +267,7 @@ class WebRTCService {
                 this.remoteUserId = data.from;
                 this.isVideoEnabled = data.withVideo;
                 this.pendingOffer = data.offer;
-    
+
                 // Déclencher la confirmation d'appel
                 if (this.onCallStatusChangeCallback) {
                     this.onCallStatusChangeCallback('incoming', data.from, data.withVideo);
@@ -193,6 +283,11 @@ class WebRTCService {
                     } else {
                         this.pendingCandidates.push(data.candidate);
                     }
+
+                    // Appeler le callback si défini
+                    if (this.onIceCandidateCallback) {
+                        this.onIceCandidateCallback(data.candidate);
+                    }
                 } catch (error) {
                     console.error('Error handling ICE candidate:', error);
                 }
@@ -200,10 +295,18 @@ class WebRTCService {
         });
 
         this.socket.on('call-answer', async (data) => {
+            console.log("data call-answer", data)
             if (data.to === this.currentUserId) {
+                console.log("Processing call answer from:", data.from);
                 try {
+                    console.log("Réponse de l'offre", data.answer);
+                    if (!this.peerConnection) {
+                        console.error('No peer connection when receiving answer');
+                        return;
+                    }
                     await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                    
+                    console.log('Remote description set successfully');
+
                     // Ajouter les candidats ICE en attente après la description distante
                     for (const candidate of this.pendingCandidates) {
                         await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
@@ -246,6 +349,10 @@ class WebRTCService {
                 }
                 this.resetCall();
             }
+        });
+        // erreur de connexion webSocket
+        this.socket.on('error', (error) => {
+            console.error('Socket error:', error);
         });
     }
 
@@ -293,6 +400,61 @@ class WebRTCService {
 
 
 
+    // async acceptCall() {
+    //     console.log("Appel accepté");
+    //     try {
+    //         if (!this.pendingOffer) {
+    //             throw new Error('No pending offer to accept');
+    //         }
+
+    //         // Obtenir le flux local avant d'initialiser la connexion
+    //         if (!this.localStream) {
+    //             const mediaResult = await this.getLocalMedia(this.isVideoEnabled);
+    //             if (!mediaResult.success) {
+    //                 throw new Error('Failed to get local media');
+    //             }
+    //         }
+
+    //         // Initialiser la connexion peer après avoir obtenu le flux local
+    //         this.initPeerConnection();
+
+    //         // Définir la description distante
+    //         console.log('Setting remote description from pending offer', this.pendingOffer);
+    //         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingOffer));
+
+    //         // Créer et envoyer la réponse
+    //         console.log('Creating answer');
+    //         const answer = await this.peerConnection.createAnswer();
+    //         await this.peerConnection.setLocalDescription(answer);
+
+    //         // Ajouter les candidats ICE en attente
+    //         if (this.pendingCandidates && this.pendingCandidates.length > 0) {
+    //             console.log('Adding pending ICE candidates:', this.pendingCandidates.length);
+    //             for (const candidate of this.pendingCandidates) {
+    //                 await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    //             }
+    //             this.pendingCandidates = [];
+    //         }
+
+    //         this.isCallActive = true;
+    //         console.log('Envoi de la réponse call-answer à:', this.remoteUserId);
+    //         this.socket.emit('call-answer', {
+    //             answer: this.peerConnection.localDescription,
+    //             to: this.remoteUserId,
+    //             from: this.currentUserId,
+    //             withVideo: this.isVideoEnabled
+    //         });
+
+    //         return true;
+    //     } catch (error) {
+    //         console.error('Error accepting call:', error);
+    //         this.isCallActive = false;
+    //         return false;
+    //     }
+    // }
+
+    // Reject an incoming call
+
     async acceptCall() {
         console.log("Appel accepté");
         try {
@@ -300,27 +462,27 @@ class WebRTCService {
                 throw new Error('No pending offer to accept');
             }
 
-            // Obtenir le flux local avant d'initialiser la connexion
+            // Initialiser la connexion peer avant tout
+            this.initPeerConnection();
+
+            // Obtenir le flux local après avoir initialisé la connexion
             if (!this.localStream) {
                 const mediaResult = await this.getLocalMedia(this.isVideoEnabled);
                 if (!mediaResult.success) {
                     throw new Error('Failed to get local media');
                 }
+
+                // S'assurer que les pistes sont ajoutées au peer connection
+                this.localStream.getTracks().forEach(track => {
+                    this.peerConnection.addTrack(track, this.localStream);
+                });
             }
 
-            // Initialiser la connexion peer après avoir obtenu le flux local
-            this.initPeerConnection();
-
             // Définir la description distante
-            console.log('Setting remote description from pending offer');
+            console.log('Setting remote description from pending offer', this.pendingOffer);
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingOffer));
 
-            // Créer et envoyer la réponse
-            console.log('Creating answer');
-            const answer = await this.peerConnection.createAnswer();
-            await this.peerConnection.setLocalDescription(answer);
-
-            // Ajouter les candidats ICE en attente
+            // Ajouter les candidats ICE en attente après avoir défini la description distante
             if (this.pendingCandidates && this.pendingCandidates.length > 0) {
                 console.log('Adding pending ICE candidates:', this.pendingCandidates.length);
                 for (const candidate of this.pendingCandidates) {
@@ -329,9 +491,21 @@ class WebRTCService {
                 this.pendingCandidates = [];
             }
 
+            // Créer et envoyer la réponse
+            console.log('Creating answer');
+            const answer = await this.peerConnection.createAnswer();
+            await this.peerConnection.setLocalDescription(answer);
+
             this.isCallActive = true;
+
+            // Mettre à jour le statut de l'appel
+            if (this.onCallStatusChangeCallback) {
+                this.onCallStatusChangeCallback('connected', this.remoteUserId, this.isVideoEnabled);
+            }
+
+            console.log('Envoi de la réponse call-answer à:', this.remoteUserId);
             this.socket.emit('call-answer', {
-                answer: answer,
+                answer: this.peerConnection.localDescription,
                 to: this.remoteUserId,
                 from: this.currentUserId,
                 withVideo: this.isVideoEnabled
@@ -345,7 +519,6 @@ class WebRTCService {
         }
     }
 
-    // Reject an incoming call
     rejectCall() {
         if (this.remoteUserId && this.socket) {
             this.socket.emit('call-rejected', {
@@ -400,8 +573,8 @@ class WebRTCService {
                 audioTracks[0].enabled = !mute;
                 this.socket.emit('toggle-audio', {
                     to: remoteUserId,
-                    from: currentUserId || this.currentUserId, 
-                    off: mute 
+                    from: currentUserId || this.currentUserId,
+                    off: mute
                 });
             }
         }
@@ -414,8 +587,8 @@ class WebRTCService {
                 videoTracks[0].enabled = !off;
                 this.socket.emit('toggle-video', {
                     to: remoteUserId,
-                    from: currentUserId || this.currentUserId, 
-                    off: off 
+                    from: currentUserId || this.currentUserId,
+                    off: off
                 });
             }
         }

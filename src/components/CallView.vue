@@ -1,29 +1,60 @@
 <template>
   <div class="call-container" :class="{ 'video-call': isVideoCall }">
     <!-- Arrière-plan avec initiale pour l'appelant et l'appelé -->
-    <div class="background-initial" v-if="!isVideoCall && (callStatus === 'outgoing' || callStatus === 'incoming')
-    ">
+    <div
+      class="background-initial"
+      v-if="
+        !isVideoCall && (callStatus === 'outgoing' || callStatus === 'incoming')
+      "
+    >
       <span class="large-initial">
         {{
-    callStatus === "outgoing"
-      ? remoteUserId.charAt(0).toUpperCase()
-      : currentUserId.charAt(0).toUpperCase()
-  }}
+          callStatus === "outgoing"
+            ? remoteUserId.charAt(0).toUpperCase()
+            : currentUserId.charAt(0).toUpperCase()
+        }}
       </span>
     </div>
-    <!-- chrono pour indiquer la durée d'appel -->
-    <!-- <div class="call-timer mt-3">
+    <!-- chrono pour indiquer la durée d'appel (à commencer du moment où l'appel a commencé)-->
+    <div class="call-timer mt-3">
     {{ formattedCallDuration }}
-  </div> -->
+  </div>
 
     <!-- Affichage du flux audio/vidéo -->
-    <div class="remote-stream-container" v-if="callStatus === 'connected'">
-      <video ref="remoteVideo" autoplay playsinline :class="{ hidden: !isVideoCall }"
-        :style="{ transform: 'scaleX(-1)' }"></video>
+    <div class="remote-stream-container">
+      <video
+        v-if="remoteStream"
+        id="remoteVideo"
+        autoplay
+        playsinline        
+        :muted="false"
+        :volume="1.0"
+        :style="{ transform: 'scaleX(-1)' }"
+        style="width: 100%; height: 100%; object-fit: cover"
+      ></video>
+
+      <!-- Bouton de lecture de secours -->
+      <button
+        v-if="showPlayButton && remoteStream"
+        @click="forcePlayRemoteVideo"
+        class="play-video-button"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-12 h-12"
+        >
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span>Cliquez pour démarrer la vidéo</span>
+      </button>
+
       <div class="remote-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
           <span
-            class="text-2xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-28 h-28 flex items-center justify-center">
+            class="text-2xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-28 h-28 flex items-center justify-center"
+          >
             {{ remoteUserId.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -37,16 +68,31 @@
     </div>
 
     <!-- flux de partage d'écran -->
-    <video v-if="screenSharingActive && !isScreenSharer" ref="screenShareVideo" :key="'screen-' + Date.now()" autoplay
-      playsinline class="screen-share-video"></video>
+    <video
+      v-if="screenSharingActive && !isScreenSharer"
+      ref="screenShareVideo"
+      :key="'screen-' + Date.now()"
+      autoplay
+      playsinline
+      class="screen-share-video"
+    ></video>
     <!-- Affichage du flux de la vidéo localement -->
-    <div class="local-stream-container" v-if="callStatus === 'connected' || localStream">
-      <video ref="localVideo" autoplay muted :class="{ hidden: !isVideoCall }"
-        :style="{ transform: 'scaleX(-1)' }"></video>
+    <div
+      class="local-stream-container"
+      v-if="currentCallStatus === 'connected' || localStream"
+    >
+      <video
+        ref="localVideo"
+        autoplay
+        muted
+        :class="{ hidden: !isVideoCall }"
+        :style="{ transform: 'scaleX(-1)' }"
+      ></video>
       <div class="local-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
           <span
-            class="text-xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-16 h-16 flex items-center justify-center">
+            class="text-xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-16 h-16 flex items-center justify-center"
+          >
             {{ currentUserId.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -56,94 +102,162 @@
     <!-- Indicateur du statut d'appel -->
     <div class="call-status">
       <div class="status-message text-center mt-5">
-        <template v-if="callStatus === 'outgoing'">
+        <template v-if="currentCallStatus === 'outgoing'">
           Appel en cours avec {{ remoteUserId }}...
         </template>
-        <template v-else-if="callStatus === 'incoming'">
+        <template v-else-if="currentCallStatus === 'incoming'">
           Appel entrant de {{ remoteUserId }}...
         </template>
-        <template v-else-if="callStatus === 'connected'">
+        <template v-else-if="currentCallStatus === 'connected'">
           En appel avec {{ remoteUserId }}
         </template>
       </div>
     </div>
 
     <div class="remote-media-indicators space-y-3 fixed top-5 right-5 z-50">
-      <transition enter-active-class="transform ease-out duration-300 transition"
-        enter-from-class="translate-y-[-20px] opacity-0" enter-to-class="translate-y-0 opacity-100"
-        leave-active-class="transform ease-in duration-200 transition" leave-from-class="translate-y-0 opacity-100"
-        leave-to-class="translate-y-[-20px] opacity-0">
-        <div v-if="!remoteVideoEnabled"
-          class="video-disabled-indicator flex items-center bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-red-400">
+      <transition
+        enter-active-class="transform ease-out duration-300 transition"
+        enter-from-class="translate-y-[-20px] opacity-0"
+        enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transform ease-in duration-200 transition"
+        leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-[-20px] opacity-0"
+      >
+        <div
+          v-if="!remoteVideoEnabled"
+          class="video-disabled-indicator flex items-center bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-red-400"
+        >
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-red-700 rounded-full">
               <span class="text-xl">🎥</span>
             </div>
             <div>
               <p class="text-sm font-medium">Caméra désactivée</p>
-              <p class="text-xs opacity-80">{{ remoteUserId }} a coupé sa caméra</p>
+              <p class="text-xs opacity-80">
+                {{ remoteUserId }} a coupé sa caméra
+              </p>
             </div>
           </div>
         </div>
       </transition>
 
-      <transition enter-active-class="transform ease-out duration-300 transition"
-        enter-from-class="translate-y-[-20px] opacity-0" enter-to-class="translate-y-0 opacity-100"
-        leave-active-class="transform ease-in duration-200 transition" leave-from-class="translate-y-0 opacity-100"
-        leave-to-class="translate-y-[-20px] opacity-0">
-        <div v-if="!remoteAudioEnabled"
-          class="audio-disabled-indicator flex items-center bg-gradient-to-r from-gray-700 to-gray-800 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-gray-600">
+      <transition
+        enter-active-class="transform ease-out duration-300 transition"
+        enter-from-class="translate-y-[-20px] opacity-0"
+        enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transform ease-in duration-200 transition"
+        leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-[-20px] opacity-0"
+      >
+        <div
+          v-if="!remoteAudioEnabled"
+          class="audio-disabled-indicator flex items-center bg-gradient-to-r from-gray-700 to-gray-800 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-gray-600"
+        >
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-gray-900 rounded-full">
               <span class="text-xl">🎤</span>
             </div>
             <div>
               <p class="text-sm font-medium">Micro désactivé</p>
-              <p class="text-xs opacity-80">{{ remoteUserId }} a coupé son micro</p>
+              <p class="text-xs opacity-80">
+                {{ remoteUserId }} a coupé son micro
+              </p>
             </div>
           </div>
         </div>
       </transition>
     </div>
 
-
     <!-- Commandes d'appel -->
     <div class="call-controls">
       <!-- couper le son de l'appel -->
-      <button @click="toggleMute" class="control-btn" :class="{ active: isMuted }">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path v-if="!isMuted" d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
-          <path v-if="!isMuted"
-            d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
-          <path v-if="isMuted"
-            d="M10.5 1.875a1.125 1.125 0 012.25 0v8.25c0 .621-.504 1.125-1.125 1.125h-1.5a1.125 1.125 0 01-1.125-1.125v-8.25a1.125 1.125 0 011.125-1.125h1.5zm-4.5 4.5a.75.75 0 00-1.5 0v5.25c0 2.9 2.35 5.25 5.25 5.25h3a.75.75 0 000-1.5h-3a3.75 3.75 0 01-3.75-3.75V6.375z" />
-          <path v-if="isMuted" d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z" />
+      <button
+        @click="toggleMute"
+        class="control-btn"
+        :class="{ active: isMuted }"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-6 h-6"
+        >
+          <path
+            v-if="!isMuted"
+            d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z"
+          />
+          <path
+            v-if="!isMuted"
+            d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z"
+          />
+          <path
+            v-if="isMuted"
+            d="M10.5 1.875a1.125 1.125 0 012.25 0v8.25c0 .621-.504 1.125-1.125 1.125h-1.5a1.125 1.125 0 01-1.125-1.125v-8.25a1.125 1.125 0 011.125-1.125h1.5zm-4.5 4.5a.75.75 0 00-1.5 0v5.25c0 2.9 2.35 5.25 5.25 5.25h3a.75.75 0 000-1.5h-3a3.75 3.75 0 01-3.75-3.75V6.375z"
+          />
+          <path
+            v-if="isMuted"
+            d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z"
+          />
         </svg>
       </button>
       <!-- basculer entre l'affichage et le masquage de la vidéo -->
-      <button @click="toggleVideo" class="control-btn" :class="{ active: isVideoOff }" v-if="isVideoCall">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path v-if="!isVideoOff"
-            d="M4.5 4.5a3 3 0 00-3 3v9a3 3 0 003 3h8.25a3 3 0 003-3v-9a3 3 0 00-3-3H4.5zM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06z" />
-          <path v-if="isVideoOff"
-            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z" />
+      <button
+        @click="toggleVideo"
+        class="control-btn"
+        :class="{ active: isVideoOff }"
+        v-if="isVideoCall"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-6 h-6"
+        >
+          <path
+            v-if="!isVideoOff"
+            d="M4.5 4.5a3 3 0 00-3 3v9a3 3 0 003 3h8.25a3 3 0 003-3v-9a3 3 0 00-3-3H4.5zM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06z"
+          />
+          <path
+            v-if="isVideoOff"
+            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z"
+          />
         </svg>
       </button>
       <!-- partager l'écran -->
-      <button @click="startScreenShare" class="control-btn" v-if="currentCallStatus === 'connected'">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+      <button
+        @click="startScreenShare"
+        class="control-btn"
+        v-if="currentCallStatus === 'connected' && userRole !== 'agent'"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-6 h-6"
+        >
           <path
-            d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm8 3l4 4h-3v4h-2v-4H8l4-4z" />
+            d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm8 3l4 4h-3v4h-2v-4H8l4-4z"
+          />
         </svg>
       </button>
       <!-- mettre fin à l'appel -->
       <button @click="endCall" class="control-btn end-call">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path fill-rule="evenodd"
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-6 h-6"
+        >
+          <path
+            fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd" />
-          <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
-            clip-rule="evenodd" />
+            clip-rule="evenodd"
+          />
+          <path
+            fill-rule="evenodd"
+            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
+            clip-rule="evenodd"
+          />
         </svg>
       </button>
       <!--enregistrer l'appel-->
@@ -159,21 +273,38 @@
     <div class="incoming-call-controls" v-if="callStatus === 'incoming'">
       <!-- accepter l'appel -->
       <button @click="acceptCall()" class="accept-btn">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path fill-rule="evenodd"
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-6 h-6"
+        >
+          <path
+            fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd" />
+            clip-rule="evenodd"
+          />
         </svg>
         Accepter
       </button>
       <!-- rejeter l'appel -->
       <button @click="rejectCall" class="reject-btn">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path fill-rule="evenodd"
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-6 h-6"
+        >
+          <path
+            fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd" />
-          <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
-            clip-rule="evenodd" />
+            clip-rule="evenodd"
+          />
+          <path
+            fill-rule="evenodd"
+            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
+            clip-rule="evenodd"
+          />
         </svg>
         Rejeter
       </button>
@@ -185,10 +316,9 @@
 import { ref, onMounted, onUnmounted, watch, computed, nextTick } from "vue";
 import WebRTCService from "../services/WebRTCService";
 import { useToast } from "vue-toastification";
-import Peer from 'peerjs';
+import Peer from "peerjs";
 
-
-
+const iceCandidateReceived = ref(false);
 /**
  * transfert de flux d'audio ou vidéo
  *
@@ -201,13 +331,13 @@ const props = defineProps({
   isVideoCall: Boolean,
   callStatus: String,
   isIncoming: Boolean,
+  userRole: String,
 });
 
 const peerConnection = ref(null);
 const remotePeerConnection = ref(null);
 const screenSharingActive = ref(false);
 const screenShareVideo = ref(null);
-
 
 // événements à émettre
 const emit = defineEmits([
@@ -346,31 +476,158 @@ const startOutgoingCall = async () => {
   }
 };
 
+const showPlayButton = ref(false);
+
+// Ajoutez cette méthode pour forcer la lecture
+const forcePlayRemoteVideo = () => {
+  const remoteVideo = document.getElementById("remoteVideo");
+  if (remoteVideo && remoteStream.value) {
+    console.log("Tentative de lecture forcée par l'utilisateur");
+
+    // Réinitialiser le srcObject pour éviter les problèmes
+    const currentStream = remoteVideo.srcObject;
+    remoteVideo.srcObject = null;
+
+    // Petit délai avant de réattacher le flux
+    setTimeout(() => {
+      remoteVideo.srcObject = currentStream;
+      remoteVideo.volume = 1.0;
+      remoteVideo.muted = false;
+
+      remoteVideo
+        .play()
+        .then(() => {
+          console.log("Lecture forcée réussie");
+          showPlayButton.value = false;
+        })
+        .catch((error) => {
+          console.error("Échec de la lecture forcée:", error);
+        });
+    }, 100);
+  }
+};
+
 /**
  *  gère le flux vidéo/audio distant reçu.
  *  met à jour le flux distant et l'affiche si un élément vidéo est présent.
  * @param {MediaStream} stream - Le flux vidéo/audio distant à afficher.
  */
 const handleRemoteStream = (stream) => {
-  console.log('Remote stream received:', stream);
-  console.log('Remote stream tracks:', stream.getTracks());
-  // Mettre à jour la valeur du flux distant
+  console.log("Flux distant reçu dans CallView:", stream);
   remoteStream.value = stream;
 
-  // Si l'élément vidéo distant existe, l'afficher
-  if (remoteVideo.value) {
-    console.log('Attaching stream to remote video element');
-    remoteVideo.value.srcObject = stream;
-    remoteVideo.value.onloadedmetadata = async () => {
-      try {
-        await remoteVideo.value.play();
-        console.log('Remote video playing successfully');
-      } catch (error) {
-        console.error('Failed to play remote video:', error);
+  // Utiliser une approche plus robuste pour attacher le flux à l'élément vidéo
+  const attachStreamToVideo = () => {
+    const remoteVideo = document.getElementById("remoteVideo");
+    console.log("Élément vidéo trouvé par ID:", remoteVideo);
+
+    if (remoteVideo) {
+      // Arrêter l'ancien flux s'il existe
+      if (remoteVideo.srcObject) {
+        const oldStream = remoteVideo.srcObject;
+        if (oldStream && oldStream.getTracks) {
+          oldStream.getTracks().forEach((track) => track.stop());
+        }
       }
-    };
-  } else {
-    console.error('Remote video element not found');
+
+      // Attacher le nouveau flux avec un délai pour éviter les interruptions
+      setTimeout(() => {
+        // Attacher le nouveau flux
+        remoteVideo.srcObject = stream;
+
+        // Forcer la lecture avec retry
+        const playVideo = async () => {
+          try {
+            // Forcer le volume à un niveau audible
+            remoteVideo.volume = 1.0;
+            remoteVideo.muted = false;
+
+            // Attendre un court instant avant de lancer la lecture
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            // Forcer la lecture
+            console.log("Tentative de lecture du flux distant...");
+            const playPromise = remoteVideo.play();
+
+            if (playPromise !== undefined) {
+              playPromise
+                .then(() => {
+                  console.log("Lecture du flux distant démarrée avec succès");
+                  // Vérifier si la vidéo joue réellement
+                  setTimeout(() => {
+                    if (remoteVideo.paused) {
+                      console.warn(
+                        "La vidéo est en pause malgré le succès de play()"
+                      );
+                      remoteVideo
+                        .play()
+                        .catch((e) =>
+                          console.error("Nouvelle tentative échouée:", e)
+                        );
+                    } else {
+                      console.log("La vidéo joue correctement");
+                    }
+                  }, 1000);
+                })
+                .catch((error) => {
+                  console.error(
+                    "Erreur lors de la lecture automatique:",
+                    error
+                  );
+                  // Si l'erreur est liée �� l'interaction utilisateur, afficher un message
+                  if (error.name === "NotAllowedError") {
+                    console.warn(
+                      "La lecture automatique a été bloquée. Interaction utilisateur requise."
+                    );
+                    // Afficher un bouton pour que l'utilisateur démarre la lecture
+                    showPlayButton.value = true;
+                  } else {
+                    // Pour les autres erreurs, réessayer après un délai
+                    setTimeout(playVideo, 1000);
+                  }
+                });
+            }
+          } catch (error) {
+            console.error("Erreur lors de la tentative de lecture:", error);
+            setTimeout(playVideo, 1000);
+          }
+        };
+
+        // Essayer de lire après un court délai
+        setTimeout(playVideo, 200);
+
+        // Également configurer l'événement onloadedmetadata
+        remoteVideo.onloadedmetadata = () => {
+          console.log(
+            "Métadonnées du flux distant chargées, tentative de lecture"
+          );
+          setTimeout(playVideo, 100);
+        };
+      }, 200);
+
+      return true;
+    } else {
+      console.warn("L'élément vidéo distant n'est pas trouvé par ID");
+      return false;
+    }
+  };
+
+  // Essayer d'attacher immédiatement
+  if (!attachStreamToVideo()) {
+    // Si l'élément n'est pas encore disponible, réessayer avec un délai
+    let attempts = 0;
+    const maxAttempts = 10;
+    const checkInterval = setInterval(() => {
+      attempts++;
+      if (attachStreamToVideo() || attempts >= maxAttempts) {
+        clearInterval(checkInterval);
+        if (attempts >= maxAttempts) {
+          console.error(
+            "Impossible de trouver l'élément vidéo distant après plusieurs tentatives"
+          );
+        }
+      }
+    }, 200); // Vérifier toutes les 200ms
   }
 };
 
@@ -423,56 +680,89 @@ onMounted(async () => {
   // Initialiser l'état actuel de l'appel à partir des propriétés du composant
   currentCallStatus.value = props.callStatus || "";
 
+  console.log("remote stream", remoteStream.value);
   // Initialiser le service WebRTC avec les paramètres nécessaires
   WebRTCService.init(
     props.socket,
     props.currentUserId,
-    (remoteStream) => {
-      if (remoteVideo.value) {
-        remoteVideo.value.srcObject = remoteStream;
-        // Utiliser la même logique que pour la vidéo locale
-        if (remoteVideo.value && remoteStream) {
-          remoteVideo.value.srcObject = remoteStream;
-          remoteVideo.value.onloadedmetadata = async () => {
-            try {
-              await remoteVideo.value.play();
-              console.log('Remote video playing successfully');
-            } catch (error) {
-              console.warn('Failed to play remote video:', error);
-            }
-          };
-        }
+    (remote) => {
+      console.log("Received remote stream in WebRTCService callback", remote);
+      if (!remote) {
+        console.error("Received null remote stream");
+        return;
       }
+      remoteStream.value = remote;
+      console.log("remote", remoteStream.value);
+      handleRemoteStream(remote); // Décommentez et corrigez cette ligne
     },
     handleCallStatusChange
   );
+  watch(
+    remoteStream,
+    (newStream, oldStream) => {
+      // Clean up old stream
+      if (oldStream) {
+        oldStream.getTracks().forEach((track) => track.stop());
+      }
 
-  // Modifier le watch pour éviter les lectures multiples
-  watch([localVideo, remoteVideo, localStream, remoteStream], () => {
-    if (localVideo.value && localStream.value) {
-      localVideo.value.srcObject = localStream.value;
-    }
-    // Ne pas tenter de lire automatiquement le flux distant ici
-    if (remoteVideo.value && remoteStream.value && !remoteVideo.value.srcObject) {
-      remoteVideo.value.srcObject = remoteStream.value;
-    }
-  });
+      if (newStream) {
+        console.log(
+          "Remote stream updated with tracks:",
+          newStream.getVideoTracks().length,
+          "video,",
+          newStream.getAudioTracks().length,
+          "audio"
+        );
+
+        if (newStream.getVideoTracks().length === 0) {
+          toast.warning("Aucune piste vidéo dans le flux distant");
+        }
+      }
+    },
+    { immediate: true }
+  );
+
+  // Add ICE candidate listener
+  //  WebRTCService.setOnIceCandidateCallback(() => {
+  //     console.log('ICE candidate received from caller');
+  //     iceCandidateReceived.value = true;
+
+  //     // If we already have the stream, display it now
+  //     if (remoteStream.value) {
+  //       console.log('Displaying delayed remote stream');
+  //       if (remoteVideo.value) {
+  //         remoteVideo.value.srcObject = remoteStream.value;
+  //         const playWithRetry = async () => {
+  //           try {
+  //             await remoteVideo.value.play();
+  //           } catch (error) {
+  //             console.warn('Failed to play delayed stream:', error);
+  //           }
+  //         };
+  //         remoteVideo.value.onloadedmetadata = playWithRetry;
+  //       }
+  //     }
+  //   });
 
   // Initialiser PeerJS
   try {
     await initPeerJS();
-    console.log('PeerJS initialisé au montage');
+    console.log("PeerJS initialisé au montage");
   } catch (error) {
-    console.error('Erreur lors de l\'initialisation de PeerJS au montage:', error);
+    console.error(
+      "Erreur lors de l'initialisation de PeerJS au montage:",
+      error
+    );
   }
-
 
   // Écouter l'événement screen-share-started
   props.socket.on("screen-share-started", (data) => {
     console.log("Réception de l'événement screen-share-started:", data);
     if (data.from === props.remoteUserId) {
       toast.info(`${props.remoteUserId} a commencé à partager son écran`);
-      console.log(`L'utilisateur distant ${data.from} a commencé à partager son écran`);
+      console.log(
+        `L'utilisateur distant ${data.from} a commencé à partager son écran`
+      );
     }
   });
 
@@ -481,7 +771,9 @@ onMounted(async () => {
     console.log("Réception de l'événement screen-share-stopped:", data);
     if (data.from === props.remoteUserId) {
       toast.info(`${props.remoteUserId} a arrêté de partager son écran`);
-      console.log(`L'utilisateur distant ${data.from} a arrêté de partager son écran`);
+      console.log(
+        `L'utilisateur distant ${data.from} a arrêté de partager son écran`
+      );
     }
   });
 
@@ -492,7 +784,8 @@ onMounted(async () => {
       // Mettre à jour l'état de la vidéo distante
       remoteVideoEnabled.value = !data.off;
       console.log(
-        `L'utilisateur distant ${data.from} a ${data.off ? "désactivé" : "activé"
+        `L'utilisateur distant ${data.from} a ${
+          data.off ? "désactivé" : "activé"
         } sa caméra`
       );
     }
@@ -505,7 +798,8 @@ onMounted(async () => {
       // Mettre à jour l'état de la vidéo distante
       remoteAudioEnabled.value = !data.off;
       console.log(
-        `L'utilisateur distant ${data.from} a ${data.off ? "désactivé" : "activé"
+        `L'utilisateur distant ${data.from} a ${
+          data.off ? "désactivé" : "activé"
         } son micro`
       );
     }
@@ -545,7 +839,7 @@ watch([localVideo, remoteVideo, localStream, remoteStream], () => {
       try {
         await remoteVideo.value.play();
       } catch (error) {
-        console.warn('Failed to play remote video in watch:', error);
+        console.warn("Failed to play remote video in watch:", error);
       }
     };
   }
@@ -555,7 +849,7 @@ const isScreenSharer = ref(false);
 
 watch(screenShareVideo, (newVal) => {
   if (newVal) {
-    console.log('Élément vidéo de partage d\'écran initialisé:', newVal);
+    console.log("Élément vidéo de partage d'écran initialisé:", newVal);
   }
 });
 
@@ -566,24 +860,34 @@ const initPeerJS = async () => {
         debug: 2,
         config: {
           iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
-        }
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            {
+              urls: "turn:numb.viagenie.ca",
+              username: "webrtc@live.com",
+              credential: "muazkh",
+            },
+            {
+              urls: "turn:openrelay.metered.ca:80",
+              username: "openrelayproject",
+              credential: "openrelayproject",
+            },
+          ],
+        },
       });
 
-      peerConnection.value.on('open', () => {
-        console.log('PeerJS initialisé avec succès, ID:', props.currentUserId);
+      peerConnection.value.on("open", () => {
+        console.log("PeerJS initialisé avec succès, ID:", props.currentUserId);
         resolve();
       });
-      peerConnection.value.on('call', (call) => {
-        console.log('Appel entrant pour le partage d\'écran reçu');
+      peerConnection.value.on("call", (call) => {
+        console.log("Appel entrant pour le partage d'écran reçu");
         // Répondre automatiquement à l'appel de partage d'écran
         call.answer();
         // Gérer le flux entrant
-        call.on('stream', async (incomingStream) => {
-          console.log('Flux de partage d\'écran reçu', incomingStream);
-          console.log('Pistes vidéo:', incomingStream.getVideoTracks().length);
+        call.on("stream", async (incomingStream) => {
+          console.log("Flux de partage d'écran reçu", incomingStream);
+          console.log("Pistes vidéo:", incomingStream.getVideoTracks().length);
 
           // Activer l'affichage et attendre que l'élément soit créé
           screenSharingActive.value = true;
@@ -593,20 +897,24 @@ const initPeerJS = async () => {
           const maxAttempts = 10;
 
           while (!screenShareVideo.value && attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 100));
             attempts++;
           }
 
           console.log("video ref après attente:", screenShareVideo.value);
 
           if (!screenShareVideo.value) {
-            console.error('Élément vidéo non trouvé après plusieurs tentatives');
+            console.error(
+              "Élément vidéo non trouvé après plusieurs tentatives"
+            );
             return;
           }
 
           // Arrêter l'ancien flux s'il existe
           if (screenShareVideo.value.srcObject) {
-            screenShareVideo.value.srcObject.getTracks().forEach(track => track.stop());
+            screenShareVideo.value.srcObject
+              .getTracks()
+              .forEach((track) => track.stop());
           }
 
           // Attacher le nouveau flux
@@ -616,63 +924,63 @@ const initPeerJS = async () => {
           const playVideo = async () => {
             try {
               await screenShareVideo.value.play();
-              console.log('Lecture du partage d\'écran démarrée avec succès');
+              console.log("Lecture du partage d'écran démarrée avec succès");
             } catch (error) {
-              console.error('Erreur lors de la lecture:', error);
+              console.error("Erreur lors de la lecture:", error);
               setTimeout(playVideo, 1000);
             }
           };
 
           screenShareVideo.value.onloadedmetadata = () => {
-            console.log('Métadonnées chargées, tentative de lecture');
+            console.log("Métadonnées chargées, tentative de lecture");
             playVideo();
           };
         });
-        call.on('error', (error) => {
-          console.error('Erreur sur l\'appel de partage d\'écran:', error);
+        call.on("error", (error) => {
+          console.error("Erreur sur l'appel de partage d'écran:", error);
         });
       });
 
-      peerConnection.value.on('error', (err) => {
-        console.error('Erreur PeerJS:', err);
+      peerConnection.value.on("error", (err) => {
+        console.error("Erreur PeerJS:", err);
         reject(err);
       });
 
       // Gestion des connexions entrantes
-      peerConnection.value.on('connection', (conn) => {
-        console.log('Nouvelle connexion entrante:', conn);
+      peerConnection.value.on("connection", (conn) => {
+        console.log("Nouvelle connexion entrante:", conn);
         remotePeerConnection.value = conn;
 
-        conn.on('data', (data) => {
-          console.log('Données reçues du pair:', data);
-          if (data.type === 'screen-share-stopped') {
+        conn.on("data", (data) => {
+          console.log("Données reçues du pair:", data);
+          if (data.type === "screen-share-stopped") {
             toast.info(`${props.remoteUserId} a arrêté de partager son écran`);
           }
         });
       });
     });
   } catch (error) {
-    console.error('Échec de l\'initialisation de PeerJS:', error);
+    console.error("Échec de l'initialisation de PeerJS:", error);
     throw error;
   }
 };
 
 const startScreenShare = async () => {
   try {
-    console.log('Démarrage du partage d\'écran avec PeerJS...');
+    console.log("Démarrage du partage d'écran avec PeerJS...");
 
     if (!peerConnection.value) {
-      console.error('PeerJS not initialized');
-      toast.error('Erreur d\'initialisation pour le partage d\'écran');
+      console.error("PeerJS not initialized");
+      toast.error("Erreur d'initialisation pour le partage d'écran");
       await initPeerJS();
     }
 
     // Get screen sharing stream
     const screenStream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
-      audio: false
+      audio: false,
     });
-    console.log('Flux de partage d\'écran obtenu');
+    console.log("Flux de partage d'écran obtenu");
 
     // Afficher le flux de partage d'écran dans le nouvel élément vidéo
     if (screenShareVideo.value) {
@@ -681,12 +989,17 @@ const startScreenShare = async () => {
 
     // Connect to remote peer if not already connected
     if (!remotePeerConnection.value) {
-      console.log('Establishing connection to remote peer:', props.remoteUserId);
-      remotePeerConnection.value = peerConnection.value.connect(props.remoteUserId);
+      console.log(
+        "Establishing connection to remote peer:",
+        props.remoteUserId
+      );
+      remotePeerConnection.value = peerConnection.value.connect(
+        props.remoteUserId
+      );
 
       // Wait for connection to open
-      remotePeerConnection.value.on('open', () => {
-        console.log('Connection to remote peer established');
+      remotePeerConnection.value.on("open", () => {
+        console.log("Connection to remote peer established");
         sendScreenStream(screenStream);
       });
     } else {
@@ -695,7 +1008,7 @@ const startScreenShare = async () => {
 
     // Handle stream ending
     screenStream.getVideoTracks()[0].onended = () => {
-      console.log('Screen sharing ended by user');
+      console.log("Screen sharing ended by user");
       stopScreenShare();
     };
 
@@ -703,12 +1016,12 @@ const startScreenShare = async () => {
     screenSharingActive.value = true;
 
     // Notify via socket
-    props.socket.emit('screen-share-started', {
+    props.socket.emit("screen-share-started", {
       from: props.currentUserId,
-      to: props.remoteUserId
+      to: props.remoteUserId,
     });
 
-    toast.success('Partage d\'écran démarré');
+    toast.success("Partage d'écran démarré");
   } catch (error) {
     console.error("Erreur lors du partage d'écran:", error);
     toast.error("Impossible de partager l'écran. Veuillez réessayer.");
@@ -719,11 +1032,13 @@ const screenShareCall = ref(null);
 
 const stopScreenShare = async () => {
   try {
-    console.log('Stopping screen share');
+    console.log("Stopping screen share");
 
     // Arrêter le partage d'écran
     if (screenShareVideo.value && screenShareVideo.value.srcObject) {
-      screenShareVideo.value.srcObject.getTracks().forEach(track => track.stop());
+      screenShareVideo.value.srcObject
+        .getTracks()
+        .forEach((track) => track.stop());
       screenShareVideo.value.srcObject = null;
     }
 
@@ -740,18 +1055,19 @@ const stopScreenShare = async () => {
     // Notify remote peer
     if (remotePeerConnection.value && remotePeerConnection.value.open) {
       remotePeerConnection.value.send({
-        type: 'screen-share-stopped',
-        from: props.currentUserId
+        type: "screen-share-stopped",
+        from: props.currentUserId,
       });
     }
 
     // Notify via socket
-    props.socket.emit('screen-share-stopped', {
+    props.socket.emit("screen-share-stopped", {
       from: props.currentUserId,
-      to: props.remoteUserId
+      to: props.remoteUserId,
     });
-
-    toast.info('Partage d\'écran arrêté');
+    screenSharingActive.value = false;
+    isScreenSharer.value = null;
+    toast.info("Partage d'écran arrêté");
   } catch (error) {
     console.error("Erreur lors de l'arrêt du partage d'écran:", error);
     toast.error("Erreur lors de l'arrêt du partage d'écran");
@@ -760,29 +1076,34 @@ const stopScreenShare = async () => {
 
 const sendScreenStream = (screenStream) => {
   try {
-    console.log('Tentative d\'envoi du flux de partage d\'écran à:', props.remoteUserId);
+    console.log(
+      "Tentative d'envoi du flux de partage d'écran à:",
+      props.remoteUserId
+    );
 
     if (!props.remoteUserId) {
-      throw new Error('ID du pair distant non défini');
+      throw new Error("ID du pair distant non défini");
     }
 
     // Créer l'appel avec le flux d'écran
     const call = peerConnection.value.call(props.remoteUserId, screenStream, {
-      metadata: { type: 'screen-share' },
+      metadata: { type: "screen-share" },
       sdpTransform: (sdp) => {
         // Forcer une meilleure qualité vidéo
-        return sdp.replace('useinbandfec=1', 'useinbandfec=1;stereo=1;maxaveragebitrate=510000');
-      }
+        return sdp.replace(
+          "useinbandfec=1",
+          "useinbandfec=1;stereo=1;maxaveragebitrate=510000"
+        );
+      },
     });
 
-
-    call.on('error', (err) => {
-      console.error('Erreur lors de l\'appel de partage d\'écran:', err);
-      toast.error('Erreur lors du partage d\'écran');
+    call.on("error", (err) => {
+      console.error("Erreur lors de l'appel de partage d'écran:", err);
+      toast.error("Erreur lors du partage d'écran");
     });
 
-    call.on('stream', (remoteStream) => {
-      console.log('Flux de partage d\'écran connecté');
+    call.on("stream", (remoteStream) => {
+      console.log("Flux de partage d'écran connecté");
     });
 
     // Sauvegarder l'appel pour pouvoir le fermer plus tard
@@ -791,16 +1112,15 @@ const sendScreenStream = (screenStream) => {
     // Notification via data connection
     if (remotePeerConnection.value && remotePeerConnection.value.open) {
       remotePeerConnection.value.send({
-        type: 'screen-share-started',
-        from: props.currentUserId
+        type: "screen-share-started",
+        from: props.currentUserId,
       });
     }
   } catch (error) {
-    console.error('Erreur lors de l\'envoi du flux de partage d\'écran:', error);
-    toast.error('Erreur lors du partage d\'écran');
+    console.error("Erreur lors de l'envoi du flux de partage d'écran:", error);
+    toast.error("Erreur lors du partage d'écran");
   }
 };
-
 
 /**
  *  tente d'obtenir le média local (audio et/ou vidéo) et de démarrer l'appel une fois la configuration terminée.
@@ -809,14 +1129,12 @@ const acceptCall = async () => {
   try {
     // Obtenir le flux local
     const result = await WebRTCService.getLocalMedia(localIsVideoCall.value);
-    console.log('Local media result:', result);
     if (!result.success) {
       throw result.error;
     }
 
     // Sauvegarder et afficher le flux local
     localStream.value = result.stream;
-    console.log('Local stream tracks:', localStream.value.getTracks());
     if (localVideo.value) {
       localVideo.value.srcObject = result.stream;
     }
@@ -824,7 +1142,6 @@ const acceptCall = async () => {
     // Accepter l'appel et envoyer notre flux local
     await WebRTCService.acceptCall(result.stream);
 
-    console.log('Call accepted, waiting for remote stream');
     // Mettre à jour le statut
     currentCallStatus.value = "connected";
     emit(
@@ -836,8 +1153,10 @@ const acceptCall = async () => {
 
     // Configurer la gestion du flux distant
     WebRTCService.onRemoteStream((remoteStream) => {
-      console.log('Remote stream callback triggered');
-      handleRemoteStream(remoteStream);
+      if (remoteVideo.value) {
+        remoteVideo.value.srcObject = remoteStream;
+        remoteStream.value = remoteStream;
+      }
     });
   } catch (error) {
     console.error("Failed to accept call:", error);
@@ -940,6 +1259,42 @@ const toggleVideo = () => {
 </script>
 
 <style scoped>
+.play-video-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 10;
+  padding: 20px;
+  font-size: 12px;
+  transition: all 0.3s ease;
+}
+
+.play-video-button:hover {
+  background-color: rgba(0, 0, 0, 0.9);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.play-video-button svg {
+  margin-bottom: 5px;
+}
+
+.play-video-button span {
+  font-size: 10px;
+  text-align: center;
+  max-width: 100px;
+}
 .call-container {
   position: relative;
   width: 100%;
