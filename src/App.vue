@@ -29,8 +29,8 @@
     <!-- Call Controls (quand l'appel n'est pas encore lancé) -->
 
     <div v-if="!isInCall && currentUserId" class="controls-container">
-      <h1 class="app-title">WebRTC Call</h1>
-      <CallControls @call-initiated="handleCallInitiation" />
+      <!-- <h1 class="app-title">WebRTC Call</h1> -->
+      <!-- <CallControls @call-initiated="handleCallInitiation" /> -->
       <div class="user-id-display">
         <p>
           Votre ID: <span class="user-id">{{ currentUserId }}</span>
