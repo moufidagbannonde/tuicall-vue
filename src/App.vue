@@ -50,6 +50,7 @@
       :call-status="callStatus"
       :is-incoming="isIncomingCall"
       @call-ended="handleCallEnded"
+      :initial-local-stream="localStream"
       @call-status-change="handleCallStatusChange"
       @video-disabled="handleVideoDisabled"
       :user-role="userRole"
@@ -113,23 +114,9 @@
               @click="rejectCall"
               class="flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                class="w-5 h-5"
-              >
-                <path
-                  fill-rule="evenodd"
-                  d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-                  clip-rule="evenodd"
-                />
-                <path
-                  fill-rule="evenodd"
-                  d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
-                  clip-rule="evenodd"
-                />
-              </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
+              <path fill="currentColor" d="m3.68 16.07l3.92-3.11V9.59c2.85-.93 5.94-.93 8.8 0v3.38l3.91 3.1L24 12.39c-6.41-7.19-17.59-7.19-24 0z"/>
+            </svg>
               Rejeter
             </button>
           </div>
@@ -215,40 +202,26 @@ const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs e
  */
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search);
-  console.log("param URL", urlParams)
-
-    // Log all parameters individually
-    console.log("Raw parameters:");
   for (const [key, value] of urlParams.entries()) {
-    console.log(`${key}: ${value}`);
   }
   
   agentId.value = decryptData(urlParams.get("agentId"));
   clientId.value = decryptData(urlParams.get("clientId"));
   const role = urlParams.get("role");
   userRole.value = role;
-  console.log("Paramètres URL détectés:", {
-    agentId: agentId.value,
-    clientId: clientId.value,
-    role,
-  });
 
   if (agentId.value && role === "agent") {
-    console.log("Mode agent détecté avec ID:", agentId.value);
     // Initialiser la connexion en tant qu'agent
     initializeConnection(agentId.value);
 
     // Si clientId est présent, on va attendre qu'il soit en ligne avant de lancer l'appel
     if (clientId.value) {
-      console.log("Client ID détecté:", clientId.value, "en attente de sa connexion...");
     }
   } else if (clientId.value && role === "client") {
-    console.log("Mode client détecté avec ID:", clientId.value);
     // Initialiser la connexion en tant que client
-    const clientInit = initializeConnection(clientId.value);
+    initializeConnection(clientId.value);
     // si le client est initialisé , lancer l'appel de l'agent vers le client
   } else {
-    console.log("Mode manuel (sans paramètres URL valides)");
   }
 });
 
@@ -258,18 +231,12 @@ onMounted(() => {
 const initializeConnection = (userId) => {
   if (!userId) return;
 
-  console.log("Initialisation de la connexion pour:", userId);
   currentUserId.value = userId;
 
   // Initialiser la connexion socket
-  socket.value = io("http://localhost:8081");
-
-  // Écouter les événements de connexion
-  // Dans la fonction initializeConnection, après l'émission de register-video-call
+  socket.value = io("http://localhost:8080");
 
   socket.value.on("connect", () => {
-    console.log("Connecté au serveur socket.io");
-
     // Déterminer le type d'utilisateur
     const role = new URLSearchParams(window.location.search).get("role");
     const userType = role || "unknown";
@@ -282,7 +249,6 @@ const initializeConnection = (userId) => {
 
     // Si c'est un client, émettre qu'il est prêt pour un appel
     if (userType === "client") {
-      console.log("Client prêt pour un appel, notification au serveur");
       socket.value.emit("client-ready-for-call", {
         clientId: currentUserId.value,
         userType: userType,
@@ -292,14 +258,10 @@ const initializeConnection = (userId) => {
 
   // Ajouter un écouteur pour l'événement client-ready
   socket.value.on("client-ready", (data) => {
-    console.log("ÉVÉNEMENT REÇU: Un client est prêt pour un appel:", data);
 
     // Si nous sommes l'agent et que c'est notre client qui est prêt
     const role = new URLSearchParams(window.location.search).get("role");
     if (role === "agent" && clientId.value === data.clientId) {
-      console.log(
-        "Notre client est prêt pour un appel, préparation pour lancer l'appel automatiquement"
-      );
 
       // Attendre un peu avant de lancer l'appel pour s'assurer que tout est initialisé
       setTimeout(async () => {
@@ -320,20 +282,7 @@ const initializeConnection = (userId) => {
           isInCall.value = true;
           isIncomingCall.value = false;
 
-          // Vérifier que les états sont bien définis
-          console.log("États avant appel:", {
-            remoteUserId: remoteUserId.value,
-            isVideoCall: isVideoCall.value,
-            callStatus: callStatus.value,
-            isInCall: isInCall.value,
-            isIncomingCall: isIncomingCall.value,
-          });
-
           // Puis lancer l'appel
-          console.log(
-            "Permissions média obtenues, lancement automatique de l'appel vers:",
-            data.clientId
-          );
           handleCallInitiation(data.clientId, true);
           WebRTCService.makeCall(data.clientId, true);
         } catch (error) {
@@ -348,7 +297,6 @@ const initializeConnection = (userId) => {
 
   // Écouter les mises à jour des utilisateurs en ligne
   socket.value.on("online_users", (users) => {
-    console.log("Utilisateurs en ligne:", users);
     onlineUsers.value = users;
   });
 
@@ -398,7 +346,6 @@ const handleCallInitiation = (targetUserId, withVideo) => {
  *  fonction  appelée lorsque le flux vidéo à distance est reçu.
  */
 const handleRemoteStream = (stream) => {
-  console.log("Remote stream received");
 };
 
 /**
@@ -461,8 +408,6 @@ const acceptIncomingCall = async () => {
     await WebRTCService.acceptCall(); // Accepter l'appel WebRTC
   } catch (error) {
     console.error("Failed to accept call:", error);
-    // Log de l'erreur
-    // En cas d'échec,  terminer l'appel
     handleCallEnded();
   }
 };

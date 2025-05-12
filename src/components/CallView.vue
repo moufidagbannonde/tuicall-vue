@@ -95,6 +95,7 @@
       class="local-stream-container"
       v-if="currentCallStatus === 'connected' || localStream"
     >
+        <!-- Pour le client... -->
       <video
         ref="localVideo"
         autoplay
@@ -241,22 +242,8 @@
       </button>
       <!-- mettre fin à l'appel -->
       <button @click="endCall" class="control-btn end-call">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd"
-          />
-          <path
-            fill-rule="evenodd"
-            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
-            clip-rule="evenodd"
-          />
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
+          <path fill="currentColor" d="m3.68 16.07l3.92-3.11V9.59c2.85-.93 5.94-.93 8.8 0v3.38l3.91 3.1L24 12.39c-6.41-7.19-17.59-7.19-24 0z"/>
         </svg>
       </button>
       <!--enregistrer l'appel-->
@@ -331,6 +318,7 @@ const props = defineProps({
   callStatus: String,
   isIncoming: Boolean,
   userRole: String,
+  initialLocalStream: MediaStream,
 });
 
 const peerConnection = ref(null);
@@ -362,6 +350,14 @@ const isVideoOff = ref(false);
 // création d'une référence locale pour l'état de la vidéo
 const localIsVideoCall = ref(props.isVideoCall);
 const currentCallStatus = ref("");
+
+// Utiliser la prop initialLocalStream pour l'aperçu local.
+// Ce watcher s'assure que localStream.value est mis à jour si la prop arrive ou change.
+watch(() => props.initialLocalStream, (newStream) => {
+  if (newStream) {
+    localStream.value = newStream;
+  }
+}, { immediate: true }); // immediate: true pour l'initialisation au montage si la prop est déjà là.
 
 // Suivre les changements du flux de la vidéo (afficher en temps réel ce que transmet la caméra de l'appelant)
 watch(
@@ -481,7 +477,6 @@ const showPlayButton = ref(false);
 const forcePlayRemoteVideo = () => {
   const remoteVideo = document.getElementById("remoteVideo");
   if (remoteVideo && remoteStream.value) {
-    console.log("Tentative de lecture forcée par l'utilisateur");
 
     // Réinitialiser le srcObject pour éviter les problèmes
     const currentStream = remoteVideo.srcObject;
@@ -496,7 +491,6 @@ const forcePlayRemoteVideo = () => {
       remoteVideo
         .play()
         .then(() => {
-          console.log("Lecture forcée réussie");
           showPlayButton.value = false;
         })
         .catch((error) => {
@@ -512,14 +506,11 @@ const forcePlayRemoteVideo = () => {
  * @param {MediaStream} stream - Le flux vidéo/audio distant à afficher.
  */
 const handleRemoteStream = (stream) => {
-  console.log("Flux distant reçu dans CallView:", stream);
   remoteStream.value = stream;
 
   // Utiliser une approche plus robuste pour attacher le flux à l'élément vidéo
   const attachStreamToVideo = () => {
     const remoteVideo = document.getElementById("remoteVideo");
-    console.log("Élément vidéo trouvé par ID:", remoteVideo);
-
     if (remoteVideo) {
       // Arrêter l'ancien flux s'il existe
       if (remoteVideo.srcObject) {
@@ -545,13 +536,11 @@ const handleRemoteStream = (stream) => {
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             // Forcer la lecture
-            console.log("Tentative de lecture du flux distant...");
             const playPromise = remoteVideo.play();
 
             if (playPromise !== undefined) {
               playPromise
                 .then(() => {
-                  console.log("Lecture du flux distant démarrée avec succès");
                   // Vérifier si la vidéo joue réellement
                   setTimeout(() => {
                     if (remoteVideo.paused) {
@@ -564,7 +553,6 @@ const handleRemoteStream = (stream) => {
                           console.error("Nouvelle tentative échouée:", e)
                         );
                     } else {
-                      console.log("La vidéo joue correctement");
                     }
                   }, 1000);
                 })
@@ -597,9 +585,6 @@ const handleRemoteStream = (stream) => {
 
         // Également configurer l'événement onloadedmetadata
         remoteVideo.onloadedmetadata = () => {
-          console.log(
-            "Métadonnées du flux distant chargées, tentative de lecture"
-          );
           setTimeout(playVideo, 100);
         };
       }, 200);
@@ -639,12 +624,8 @@ const handleRemoteStream = (stream) => {
  * @param {boolean} withVideo - Indique si l'appel est vidéo ou audio.
  */
 const handleCallStatusChange = (status, userId, withVideo) => {
-  console.log("Call status changed:", status);
-  currentCallStatus.value = status;
-
   // Démarrer le timer quand l'appel est connecté
   if (status === "connected") {
-    console.log("Starting timer for status:", status);
     // S'assurer qu'il n'y a pas déjà un timer en cours
     if (timerInterval.value) {
       clearInterval(timerInterval.value);
@@ -669,33 +650,35 @@ const handleCallStatusChange = (status, userId, withVideo) => {
   emit("call-status-change", status, userId, withVideo);
 };
 
+watch(() => props.callStatus, async (newStatus) => {
+  currentCallStatus.value = newStatus;
+
+  if (newStatus === 'connected' && !localStream.value && props.initialLocalStream) {
+          localStream.value = props.initialLocalStream;
+     }
+
+}, { immediate: true });
+
 /**
  *  fonction  appelée lorsque le composant est monté.
  *  initialise le service WebRTC et démarre l'appel sortant si nécessaire.
  */
 onMounted(async () => {
-  // Initialiser le type d'appel (vidéo ou audio) à partir des propriétés du composant
-  localIsVideoCall.value = props.isVideoCall;
-  // Initialiser l'état actuel de l'appel à partir des propriétés du composant
-  currentCallStatus.value = props.callStatus || "";
-
-  console.log("remote stream", remoteStream.value);
   // Initialiser le service WebRTC avec les paramètres nécessaires
   WebRTCService.init(
     props.socket,
     props.currentUserId,
     (remote) => {
-      console.log("Received remote stream in WebRTCService callback", remote);
       if (!remote) {
         console.error("Received null remote stream");
         return;
       }
       remoteStream.value = remote;
-      console.log("remote", remoteStream.value);
-      handleRemoteStream(remote); // Décommentez et corrigez cette ligne
+      handleRemoteStream(remote);
     },
     handleCallStatusChange
   );
+  
   watch(
     remoteStream,
     (newStream, oldStream) => {
@@ -705,14 +688,6 @@ onMounted(async () => {
       }
 
       if (newStream) {
-        console.log(
-          "Remote stream updated with tracks:",
-          newStream.getVideoTracks().length,
-          "video,",
-          newStream.getAudioTracks().length,
-          "audio"
-        );
-
         if (newStream.getVideoTracks().length === 0) {
           toast.warning("Aucune piste vidéo dans le flux distant");
         }
@@ -721,32 +696,9 @@ onMounted(async () => {
     { immediate: true }
   );
 
-  // Add ICE candidate listener
-  //  WebRTCService.setOnIceCandidateCallback(() => {
-  //     console.log('ICE candidate received from caller');
-  //     iceCandidateReceived.value = true;
-
-  //     // If we already have the stream, display it now
-  //     if (remoteStream.value) {
-  //       console.log('Displaying delayed remote stream');
-  //       if (remoteVideo.value) {
-  //         remoteVideo.value.srcObject = remoteStream.value;
-  //         const playWithRetry = async () => {
-  //           try {
-  //             await remoteVideo.value.play();
-  //           } catch (error) {
-  //             console.warn('Failed to play delayed stream:', error);
-  //           }
-  //         };
-  //         remoteVideo.value.onloadedmetadata = playWithRetry;
-  //       }
-  //     }
-  //   });
-
   // Initialiser PeerJS
   try {
     await initPeerJS();
-    console.log("PeerJS initialisé au montage");
   } catch (error) {
     console.error(
       "Erreur lors de l'initialisation de PeerJS au montage:",
@@ -756,51 +708,31 @@ onMounted(async () => {
 
   // Écouter l'événement screen-share-started
   props.socket.on("screen-share-started", (data) => {
-    console.log("Réception de l'événement screen-share-started:", data);
     if (data.from === props.remoteUserId) {
       toast.info(`${props.remoteUserId} a commencé à partager son écran`);
-      console.log(
-        `L'utilisateur distant ${data.from} a commencé à partager son écran`
-      );
     }
   });
 
   // Écouter l'événement screen-share-stopped
   props.socket.on("screen-share-stopped", (data) => {
-    console.log("Réception de l'événement screen-share-stopped:", data);
     if (data.from === props.remoteUserId) {
       toast.info(`${props.remoteUserId} a arrêté de partager son écran`);
-      console.log(
-        `L'utilisateur distant ${data.from} a arrêté de partager son écran`
-      );
     }
   });
 
   // Écouter l'événement toggle-video
   props.socket.on("toggle-video", (data) => {
-    console.log("Réception de l'événement toggle-video:", data);
     if (data.from === props.remoteUserId) {
       // Mettre à jour l'état de la vidéo distante
       remoteVideoEnabled.value = !data.off;
-      console.log(
-        `L'utilisateur distant ${data.from} a ${
-          data.off ? "désactivé" : "activé"
-        } sa caméra`
-      );
     }
   });
 
   // Écouter l'événement toggle-audio
   props.socket.on("toggle-audio", (data) => {
-    console.log("Réception de l'événement toggle-audio:", data);
     if (data.from === props.remoteUserId) {
       // Mettre à jour l'état de la vidéo distante
       remoteAudioEnabled.value = !data.off;
-      console.log(
-        `L'utilisateur distant ${data.from} a ${
-          data.off ? "désactivé" : "activé"
-        } son micro`
-      );
     }
   });
 
@@ -846,12 +778,6 @@ watch([localVideo, remoteVideo, localStream, remoteStream], () => {
 
 const isScreenSharer = ref(false);
 
-watch(screenShareVideo, (newVal) => {
-  if (newVal) {
-    console.log("Élément vidéo de partage d'écran initialisé:", newVal);
-  }
-});
-
 const initPeerJS = async () => {
   try {
     return new Promise((resolve, reject) => {
@@ -876,17 +802,13 @@ const initPeerJS = async () => {
       });
 
       peerConnection.value.on("open", () => {
-        console.log("PeerJS initialisé avec succès, ID:", props.currentUserId);
         resolve();
       });
       peerConnection.value.on("call", (call) => {
-        console.log("Appel entrant pour le partage d'écran reçu");
         // Répondre automatiquement à l'appel de partage d'écran
         call.answer();
         // Gérer le flux entrant
         call.on("stream", async (incomingStream) => {
-          console.log("Flux de partage d'écran reçu", incomingStream);
-          console.log("Pistes vidéo:", incomingStream.getVideoTracks().length);
 
           // Activer l'affichage et attendre que l'élément soit créé
           screenSharingActive.value = true;
@@ -899,8 +821,6 @@ const initPeerJS = async () => {
             await new Promise((resolve) => setTimeout(resolve, 100));
             attempts++;
           }
-
-          console.log("video ref après attente:", screenShareVideo.value);
 
           if (!screenShareVideo.value) {
             console.error(
@@ -923,7 +843,6 @@ const initPeerJS = async () => {
           const playVideo = async () => {
             try {
               await screenShareVideo.value.play();
-              console.log("Lecture du partage d'écran démarrée avec succès");
             } catch (error) {
               console.error("Erreur lors de la lecture:", error);
               setTimeout(playVideo, 1000);
@@ -931,7 +850,6 @@ const initPeerJS = async () => {
           };
 
           screenShareVideo.value.onloadedmetadata = () => {
-            console.log("Métadonnées chargées, tentative de lecture");
             playVideo();
           };
         });
@@ -947,11 +865,9 @@ const initPeerJS = async () => {
 
       // Gestion des connexions entrantes
       peerConnection.value.on("connection", (conn) => {
-        console.log("Nouvelle connexion entrante:", conn);
         remotePeerConnection.value = conn;
 
         conn.on("data", (data) => {
-          console.log("Données reçues du pair:", data);
           if (data.type === "screen-share-stopped") {
             toast.info(`${props.remoteUserId} a arrêté de partager son écran`);
           }
@@ -966,8 +882,6 @@ const initPeerJS = async () => {
 
 const startScreenShare = async () => {
   try {
-    console.log("Démarrage du partage d'écran avec PeerJS...");
-
     if (!peerConnection.value) {
       console.error("PeerJS not initialized");
       toast.error("Erreur d'initialisation pour le partage d'écran");
@@ -979,8 +893,6 @@ const startScreenShare = async () => {
       video: true,
       audio: false,
     });
-    console.log("Flux de partage d'écran obtenu");
-
     // Afficher le flux de partage d'écran dans le nouvel élément vidéo
     if (screenShareVideo.value) {
       screenShareVideo.value.srcObject = screenStream;
@@ -988,17 +900,12 @@ const startScreenShare = async () => {
 
     // Connect to remote peer if not already connected
     if (!remotePeerConnection.value) {
-      console.log(
-        "Establishing connection to remote peer:",
-        props.remoteUserId
-      );
       remotePeerConnection.value = peerConnection.value.connect(
         props.remoteUserId
       );
 
       // Wait for connection to open
       remotePeerConnection.value.on("open", () => {
-        console.log("Connection to remote peer established");
         sendScreenStream(screenStream);
       });
     } else {
@@ -1007,7 +914,6 @@ const startScreenShare = async () => {
 
     // Handle stream ending
     screenStream.getVideoTracks()[0].onended = () => {
-      console.log("Screen sharing ended by user");
       stopScreenShare();
     };
 
@@ -1031,8 +937,6 @@ const screenShareCall = ref(null);
 
 const stopScreenShare = async () => {
   try {
-    console.log("Stopping screen share");
-
     // Arrêter le partage d'écran
     if (screenShareVideo.value && screenShareVideo.value.srcObject) {
       screenShareVideo.value.srcObject
@@ -1075,11 +979,6 @@ const stopScreenShare = async () => {
 
 const sendScreenStream = (screenStream) => {
   try {
-    console.log(
-      "Tentative d'envoi du flux de partage d'écran à:",
-      props.remoteUserId
-    );
-
     if (!props.remoteUserId) {
       throw new Error("ID du pair distant non défini");
     }
@@ -1102,7 +1001,6 @@ const sendScreenStream = (screenStream) => {
     });
 
     call.on("stream", (remoteStream) => {
-      console.log("Flux de partage d'écran connecté");
     });
 
     // Sauvegarder l'appel pour pouvoir le fermer plus tard
@@ -1165,8 +1063,6 @@ const acceptCall = async () => {
 
 // fonction pour nettoyer les états
 const cleanupCallState = () => {
-  console.log("Cleaning up call state...");
-
   // Arrêter le chronomètre d'abord
   if (timerInterval.value) {
     clearInterval(timerInterval.value);
@@ -1199,7 +1095,6 @@ const cleanupCallState = () => {
  *  met fin à l'appel en rejetant la connexion via WebRTC et notifie les autres composants.
  */
 const rejectCall = () => {
-  console.log("appel rejeté");
   // Rejeter l'appel via WebRTC
   WebRTCService.rejectCall();
   // Nettoyer les états

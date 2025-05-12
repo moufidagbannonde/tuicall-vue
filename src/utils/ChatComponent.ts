@@ -9,6 +9,4 @@ interface Message {
     replyTo?: string;
   }
 
-  
 const msg = sessionStorage.getItem("userId");
-
