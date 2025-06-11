@@ -35,7 +35,7 @@
       </div>
     </div>
     <!-- Affichage du flux audio/vidéo -->
-    <div class="remote-stream-container">
+    <div class="remote-stream-container relative">
       <video
         v-if="remoteStream"
         id="remoteVideo"
@@ -78,6 +78,33 @@
           <span></span>
           <span></span>
         </div>
+      </div>
+
+      <div class="absolute top-4 right-4 z-20" v-if="userRole === 'agent'">
+        <button @click="toggleRecording"
+        :disabled="awaitingRecordPermission"
+          :class="[
+            isRecording ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600',
+            awaitingRecordPermission ? 'opacity-50 cursor-not-allowed' : ''
+          ]"
+          class="text-white p-2 rounded-full shadow-lg" title="Enregistrer l'appel">
+          <svg v-if="awaitingRecordPermission" class="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+
+           <svg v-else-if="!isRecording" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none"
+            viewBox="0 0 24 24" stroke="currentColor">
+            <circle cx="12" cy="12" r="10" stroke-width="2" />
+            <circle cx="12" cy="12" r="4" fill="currentColor" />
+          </svg>
+
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor">
+            <rect x="9" y="9" width="6" height="6" fill="currentColor" stroke-width="2" />
+            <circle cx="12" cy="12" r="10" stroke-width="2" />
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -246,13 +273,6 @@
           <path fill="currentColor" d="m3.68 16.07l3.92-3.11V9.59c2.85-.93 5.94-.93 8.8 0v3.38l3.91 3.1L24 12.39c-6.41-7.19-17.59-7.19-24 0z"/>
         </svg>
       </button>
-      <!--enregistrer l'appel-->
-      <!-- <button @click="toggleRecording" :class="['control-button', isRecording ? 'recording' : '']"
-        title="Enregistrer l'appel">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <circle cx="12" cy="12" r="6" :fill="isRecording ? '#ff0000' : 'none'" stroke-width="2" />
-        </svg>
-      </button> -->
     </div>
 
     <!-- Commandes d'appel entrant -->
@@ -325,6 +345,7 @@ const peerConnection = ref(null);
 const remotePeerConnection = ref(null);
 const screenSharingActive = ref(false);
 const screenShareVideo = ref(null);
+const awaitingRecordPermission = ref(false);
 
 // événements à émettre
 const emit = defineEmits([
@@ -381,20 +402,38 @@ const callStatusText = computed(() => {
 });
 
 const toggleRecording = () => {
-  if (!isRecording.value) {
-    if (WebRTCService.startRecording()) {
-      isRecording.value = true;
-    }
-  } else {
+  if (isRecording.value) { // Si on enregistre déjà, on arrête
     if (WebRTCService.stopRecording()) {
       isRecording.value = false;
+      props.socket.emit('recording-status-changed', { to: props.remoteUserId, recording: false });
+      toast.info("Enregistrement arrêté.");
+    } else {
+      toast.error("Erreur lors de l'arrêt de l'enregistrement.");
     }
+  // if (!isRecording.value) {
+  //   if (WebRTCService.startRecording()) {
+  //     isRecording.value = true;
+  //   }
+  // } else {
+  //   if (WebRTCService.stopRecording()) {
+  //     isRecording.value = false;
+  //   }
+  } else { // Sinon, on demande la permission pour démarrer
+    if (awaitingRecordPermission.value) return; // Déjà en attente d'une réponse
+
+    awaitingRecordPermission.value = true;
+    props.socket.emit('request-record-permission', {
+      from: props.currentUserId, // ID de l'agent
+      to: props.remoteUserId    // ID du client
+    });
+    toast.info("Demande d'autorisation d'enregistrement envoyée au client...");
   }
 };
 
 const callStartTime = ref(null);
 const callDuration = ref(0);
 const timerInterval = ref(null);
+const isCallBeingRecordedByAgent = ref(false);
 
 // Ajoutez cette computed property pour formater la durée
 const formattedCallDuration = computed(() => {
@@ -650,6 +689,39 @@ const handleCallStatusChange = (status, userId, withVideo) => {
   emit("call-status-change", status, userId, withVideo);
 };
 
+ // Écouteur pour la réponse de permission d'enregistrement (côté Agent)
+ props.socket.on('record-permission-response', ({ from, to, granted }) => {
+    if (props.userRole === 'agent' && to === props.currentUserId && from === props.remoteUserId) {
+      awaitingRecordPermission.value = false;
+      if (granted) {
+        if (WebRTCService.startRecording()) {
+          isRecording.value = true;
+          props.socket.emit('recording-status-changed', { to: props.remoteUserId, recording: true });
+          toast.success("Enregistrement démarré avec l'accord du client.");
+        } else {
+          isRecording.value = false;
+          toast.error("Erreur lors du démarrage de l'enregistrement.");
+        }
+      } else {
+        isRecording.value = false;
+        toast.info("Le client a refusé la demande d'enregistrement.");
+      }
+    }
+  });
+
+  // Écouteur pour savoir si l'appel est en cours d'enregistrement (côté Client)
+  props.socket.on('recording-status-changed', ({ recording }) => {
+    if (props.userRole === 'client') {
+      isCallBeingRecordedByAgent.value = recording;
+      // Vous pouvez utiliser isCallBeingRecordedByAgent.value pour afficher un indicateur au client
+      if (recording) {
+        toast.info("Cet appel est en cours d'enregistrement.", { timeout: 5000 });
+      } else {
+        toast.info("L'enregistrement de l'appel est terminé.", { timeout: 3000 });
+      }
+    }
+  });
+  
 watch(() => props.callStatus, async (newStatus) => {
   currentCallStatus.value = newStatus;
 
@@ -659,11 +731,20 @@ watch(() => props.callStatus, async (newStatus) => {
 
 }, { immediate: true });
 
+const auto_record_video_call = localStorage.getItem('auto_record_video_call');
+
 /**
  *  fonction  appelée lorsque le composant est monté.
  *  initialise le service WebRTC et démarre l'appel sortant si nécessaire.
  */
 onMounted(async () => {
+  if (auto_record_video_call) {
+    const maDonnee = JSON.parse(auto_record_video_call);
+    console.log("Donnée récupérée de l'autre projet :", maDonnee);
+    // Tu peux maintenant utiliser maDonnee.utilisateur, maDonnee.theme, etc.
+  } else {
+    console.log("Aucune donnée partagée trouvée.");
+  }
   // Initialiser le service WebRTC avec les paramètres nécessaires
   WebRTCService.init(
     props.socket,

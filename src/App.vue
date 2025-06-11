@@ -123,6 +123,36 @@
         </div>
       </div>
     </div>
+
+       <!-- Modal de Permission d'Enregistrement (pour le client) -->
+    <div
+      v-if="showRecordPermissionModal && userRole === 'client'"
+      class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[100] p-4"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-auto">
+        <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+          Autorisation d'enregistrement
+        </h2>
+        <p class="mb-6 text-gray-700 dark:text-gray-300">
+          L'agent ({{ recordRequesterId }}) souhaite enregistrer cet appel.
+          Acceptez-vous de poursuivre ?
+        </p>
+        <div class="flex justify-end gap-4">
+          <button
+            @click="handleRecordPermissionResponse(false)"
+            class="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+          >
+            Refuser
+          </button>
+          <button
+            @click="handleRecordPermissionResponse(true)"
+            class="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+          >
+            Autoriser
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -153,6 +183,8 @@ const localStream = ref(null);
 const agentId = ref(null);
 const clientId = ref(null);
 const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs en ligne
+const showRecordPermissionModal = ref(false);
+const recordRequesterId = ref(null); // ID de l'agent demandant l'enregistrement
 
 /**
  * Decrypts encrypted data
@@ -224,6 +256,16 @@ onMounted(() => {
   } else {
   }
 });
+
+  // Écouteur pour la demande de permission d'enregistrement (côté Client)
+  if (userRole.value === 'client') {
+    socket.value.on('request-record-permission', ({ from }) => { // `from` est l'ID de l'agent
+      if (isInCall.value && remoteUserId.value === from) { // Vérifier si la demande vient de l'interlocuteur actuel
+        recordRequesterId.value = from;
+        showRecordPermissionModal.value = true;
+      }
+    });
+  }
 
 /**
  * Initialise la connexion avec l'ID spécifié
@@ -425,6 +467,21 @@ const rejectCall = () => {
  */
 const handleVideoDisabled = () => {
   isVideoCall.value = false; // Désactiver l'appel vidéo
+};
+
+/**
+ * Gère la réponse du client à la demande d'enregistrement.
+ */
+ const handleRecordPermissionResponse = (granted) => {
+  if (socket.value && recordRequesterId.value && userRole.value === 'client') {
+    socket.value.emit('record-permission-response', {
+      from: currentUserId.value,    // ID du client
+      to: recordRequesterId.value,  // ID de l'agent
+      granted: granted
+    });
+  }
+  showRecordPermissionModal.value = false;
+  recordRequesterId.value = null;
 };
 </script>
 
