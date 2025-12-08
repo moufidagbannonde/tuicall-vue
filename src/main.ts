@@ -1,3 +1,4 @@
+import '../websocket-interceptor.js' // ← EN PREMIER, avant tout !
 import './assets/main.css'
 
 import { createApp } from 'vue'

@@ -209,7 +209,7 @@ const recordRequesterId = ref(null); // ID de l'agent demandant l'enregistrement
     
     // Create the same key using SHA-256
     const keyWordArray = CryptoJS.SHA256(secretKey);
-    
+  
     // Decrypt the data
     const ciphertext = CryptoJS.enc.Hex.parse(encryptedData);
     const decrypted = CryptoJS.AES.decrypt(
@@ -242,18 +242,16 @@ onMounted(() => {
   const role = urlParams.get("role");
   userRole.value = role;
 
+  console.log('IDs décryptés:', { agentId: agentId.value, clientId: clientId.value, role });
+  
   if (agentId.value && role === "agent") {
-    // Initialiser la connexion en tant qu'agent
+    // Initialiser la connexion en tant qu'agent avec l'ID de l'agent
     initializeConnection(agentId.value);
-
-    // Si clientId est présent, on va attendre qu'il soit en ligne avant de lancer l'appel
-    if (clientId.value) {
-    }
   } else if (clientId.value && role === "client") {
-    // Initialiser la connexion en tant que client
+    // Initialiser la connexion en tant que client avec l'ID du client
     initializeConnection(clientId.value);
-    // si le client est initialisé , lancer l'appel de l'agent vers le client
   } else {
+    console.error('Configuration invalide:', { agentId: agentId.value, clientId: clientId.value, role });
   }
 });
 
@@ -276,7 +274,7 @@ const initializeConnection = (userId) => {
   currentUserId.value = userId;
 
   // Initialiser la connexion socket
-  socket.value = io("http://localhost:8080");
+  socket.value = io("http://localhost:8081");
 
   socket.value.on("connect", () => {
     // Déterminer le type d'utilisateur
@@ -300,9 +298,11 @@ const initializeConnection = (userId) => {
 
   // Ajouter un écouteur pour l'événement client-ready
   socket.value.on("client-ready", (data) => {
-
+    console.log("Client ready:", data);
     // Si nous sommes l'agent et que c'est notre client qui est prêt
     const role = new URLSearchParams(window.location.search).get("role");
+    console.log("role",role)
+    console.log("client id",clientId.value)
     if (role === "agent" && clientId.value === data.clientId) {
 
       // Attendre un peu avant de lancer l'appel pour s'assurer que tout est initialisé

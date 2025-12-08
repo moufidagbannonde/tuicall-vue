@@ -78,13 +78,28 @@ class WebRTCService {
     };
 
     // Ajouter un gestionnaire d'événements pour la connexion
-    this.peerConnection.onconnectionstatechange = (event) => {};
-
-    // Ajouter un gestionnaire d'événements pour l'état de la signalisation
-    this.peerConnection.onsignalingstatechange = (event) => {};
+    this.peerConnection.onconnectionstatechange = () => {
+      const state = this.peerConnection.connectionState;
+      console.log('[WebRTC] Connection state:', state);
+      
+      if (state === 'connected' && this.onCallStatusChangeCallback) {
+        this.onCallStatusChangeCallback('connected', this.remoteUserId, this.isVideoEnabled);
+      } else if (state === 'failed' || state === 'closed') {
+        // Ignorer 'disconnected' temporaire (peut être causé par l'avatar)
+        if (this.onCallStatusChangeCallback) {
+          this.onCallStatusChangeCallback('ended', this.remoteUserId, false);
+        }
+      } else if (state === 'disconnected') {
+        console.warn('[WebRTC] ⚠️ Disconnected temporaire, tentative de reconnexion...');
+        // Ne pas terminer l'appel immédiatement
+      }
+    };
 
     // Ajouter un gestionnaire d'événements pour l'état de la connexion ICE
-    this.peerConnection.oniceconnectionstatechange = (event) => {};
+    this.peerConnection.oniceconnectionstatechange = () => {
+      const state = this.peerConnection.iceConnectionState;
+      console.log('[WebRTC] ICE connection state:', state);
+    };
 
     // Ajouter les pistes du flux local si disponible
     if (this.localStream) {
@@ -273,6 +288,16 @@ class WebRTCService {
             console.error("No peer connection when receiving answer");
             return;
           }
+          
+          // Vérifier l'état avant de définir la description distante
+          const state = this.peerConnection.signalingState;
+          if (state === 'stable' || state === 'have-remote-offer') {
+            return;
+          }
+          if (state !== 'have-local-offer') {
+            return;
+          }
+          
           await this.peerConnection.setRemoteDescription(
             new RTCSessionDescription(data.answer)
           );
@@ -285,7 +310,7 @@ class WebRTCService {
           }
           this.pendingCandidates = [];
         } catch (error) {
-          console.error("Error in call-answer:", error);
+          // Ignorer silencieusement les erreurs d'état
         }
       }
     });
@@ -411,14 +436,7 @@ class WebRTCService {
 
       this.isCallActive = true;
 
-      // Mettre à jour le statut de l'appel
-      if (this.onCallStatusChangeCallback) {
-        this.onCallStatusChangeCallback(
-          "connected",
-          this.remoteUserId,
-          this.isVideoEnabled
-        );
-      }
+      // Le statut "connected" sera automatiquement déclenché par onconnectionstatechange
       this.socket.emit("call-answer", {
         answer: this.peerConnection.localDescription,
         to: this.remoteUserId,

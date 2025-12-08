@@ -3,8 +3,61 @@
   <head>
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
-    <script src="https://web.sdk.qcloud.com/trtc/trtc-js-sdk.js"></script>
-
+     <script>
+      if (!window.__websocketInterceptorInstalled) {
+        console.log('[INTERCEPTOR INLINE] Installation...');
+        const OriginalWebSocket = window.WebSocket;
+        const failedConnections = new Set();
+        
+        window.WebSocket = function(url, protocols) {
+          let modifiedUrl = url;
+          
+          if (typeof url === 'string') {
+            // BLOQUER COMPLÈTEMENT localhost:5001
+            if (url.includes('localhost:5001')) {
+              console.warn('[INTERCEPTOR] ❌ Connexion bloquée:', url);
+              // Retourner un WebSocket factice qui échoue immédiatement
+              const fakeWs = Object.create(OriginalWebSocket.prototype);
+              fakeWs.readyState = 3; // CLOSED
+              fakeWs.close = () => {};
+              setTimeout(() => {
+                if (fakeWs.onerror) fakeWs.onerror(new Event('error'));
+                if (fakeWs.onclose) fakeWs.onclose(new CloseEvent('close', { code: 1006 }));
+              }, 0);
+              return fakeWs;
+            }
+            
+            if (url.startsWith('ws://localhost:8081')) {
+              modifiedUrl = url.replace('ws://localhost:8081', 'ws://localhost:5173');
+              console.log('[INTERCEPTOR] Redirigé 8081 → 5173:', modifiedUrl);
+            } else if (url.startsWith('wss://') && !url.includes('localhost:5173')) {
+              const urlObj = new URL(url);
+              if (urlObj.search.includes('rtcToken=')) {
+                modifiedUrl = `ws://localhost:5173/avatar-socket${urlObj.pathname}${urlObj.search}`;
+                console.log('[INTERCEPTOR] Avatar:', modifiedUrl);
+              } else {
+                modifiedUrl = `ws://localhost:5173${urlObj.pathname}${urlObj.search}`;
+                console.log('[INTERCEPTOR] External:', modifiedUrl);
+              }
+            }
+          }
+          
+          return new OriginalWebSocket(modifiedUrl, protocols);
+        };
+        
+        Object.setPrototypeOf(window.WebSocket, OriginalWebSocket);
+        window.WebSocket.prototype = OriginalWebSocket.prototype;
+        ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(prop => {
+          Object.defineProperty(window.WebSocket, prop, {
+            value: OriginalWebSocket[prop],
+            writable: false,
+            enumerable: true
+          });
+        });
+        window.__websocketInterceptorInstalled = true;
+        console.log('[INTERCEPTOR INLINE] ✅ Installé');
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Call</title>
   </head>
