@@ -4,7 +4,7 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   server: {
-    port: 5173,
+    port: 8000,
     host: true,
     https: false,
     
@@ -137,7 +137,8 @@ export default defineConfig({
       
       // Proxy pour Socket.IO LOCAL (votre WebRTC entre utilisateurs)
       '/socket.io': {
-        target: 'http://localhost:8081',
+        target: 'https://meilleursforfaitsmobiles.fr/backend',
+        // target: 'http://localhost:8081',
         changeOrigin: true,
         secure: false,
         ws: true,

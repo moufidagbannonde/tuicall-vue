@@ -180,7 +180,8 @@ class VirtualAvatarService {
       }, 5000);
 
       try {
-        const socket = new WebSocket('ws://localhost:5173/socket.io/?EIO=4&transport=websocket');
+        const socket = new WebSocket('ws://https://dial-dev.vippinterstis.com/socket.io/?EIO=4&transport=websocket');
+        // const socket = new WebSocket('ws://localhost:5173/socket.io/?EIO=4&transport=websocket');
 
         socket.onopen = () => {
           clearTimeout(timeout);
@@ -468,39 +469,39 @@ class VirtualAvatarService {
     }
   }
 
-async startAudioStream(existingAudioTrack = null) {
-  if (!this.isInitialized || !this.client) {
-    throw new Error('Avatar non initialisé');
-  }
-  
-  try {
-    let audioTrack;
-    
-    if (existingAudioTrack) {
-      // Utiliser le track audio existant de WebRTC
-      console.log('[AUDIO] Utilisation du flux audio WebRTC existant');
-      audioTrack = existingAudioTrack;
-    } else {
-      // Fallback : demander un nouveau flux (ne devrait jamais arriver normalement)
-      console.log('[AUDIO] Demande d\'accès au microphone...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }, 
-        video: false 
-      });
-      audioTrack = stream.getAudioTracks()[0];
-      console.log('[AUDIO] ✓ Accès microphone accordé');
+  async startAudioStream(existingAudioTrack = null) {
+    if (!this.isInitialized || !this.client) {
+      throw new Error('Avatar non initialisé');
     }
-    
-    this.processAudioStream(audioTrack);
-  } catch (error) {
-    console.error('[AUDIO] ✗ Erreur accès micro:', error);
-    throw error;
+
+    try {
+      let audioTrack;
+
+      if (existingAudioTrack) {
+        // Utiliser le track audio existant de WebRTC
+        console.log('[AUDIO] Utilisation du flux audio WebRTC existant');
+        audioTrack = existingAudioTrack;
+      } else {
+        // Fallback : demander un nouveau flux (ne devrait jamais arriver normalement)
+        console.log('[AUDIO] Demande d\'accès au microphone...');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        });
+        audioTrack = stream.getAudioTracks()[0];
+        console.log('[AUDIO] ✓ Accès microphone accordé');
+      }
+
+      this.processAudioStream(audioTrack);
+    } catch (error) {
+      console.error('[AUDIO] ✗ Erreur accès micro:', error);
+      throw error;
+    }
   }
-}
 
   processAudioStream(audioTrack) {
     const mediaStream = new MediaStream([audioTrack]);
