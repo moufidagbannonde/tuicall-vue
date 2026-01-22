@@ -20,18 +20,18 @@ export default defineConfig({
   server: {
     proxy: {
       '^/openapi/interactive/websocket': {
-        target: 'wss://37.64.205.84',
+        target: 'wss://10.46.7.1:3000',
         changeOrigin: true,
         secure: false,
         ws: true
       },
       '/openapi': {
-        target: 'https://37.64.205.84',
+        target: 'https://10.46.7.1:3000',
         changeOrigin: true,
         secure: false
       },
       '/avatar-socket': {
-        target: 'wss://37.64.205.84',
+        target: 'wss://10.46.7.1:3000',
         changeOrigin: true,
         secure: false,
         ws: true,

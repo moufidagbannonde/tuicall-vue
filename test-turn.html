@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test TURN Server</title>
+</head>
+<body>
+    <h1>Test de connectivité TURN</h1>
+    <button onclick="testTURN()">Tester les serveurs TURN</button>
+    <pre id="results"></pre>
+
+    <script>
+        async function testTURN() {
+            const results = document.getElementById('results');
+            results.textContent = 'Test en cours...\n';
+
+            const servers = [
+                {
+                    urls: 'stun:stun.l.google.com:19302'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                }
+            ];
+
+            for (const server of servers) {
+                try {
+                    results.textContent += `\nTest de ${server.urls}...\n`;
+                    
+                    const pc = new RTCPeerConnection({ iceServers: [server] });
+                    
+                    const candidatesFound = [];
+                    
+                    pc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            candidatesFound.push(event.candidate.type);
+                            results.textContent += `  ✅ Candidat trouvé: ${event.candidate.type}\n`;
+                        } else {
+                            results.textContent += `  Gathering terminé. Types: ${[...new Set(candidatesFound)].join(', ')}\n`;
+                        }
+                    };
+
+                    // Créer une offre pour déclencher ICE gathering
+                    pc.createDataChannel('test');
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+
+                    // Attendre 5 secondes
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    
+                    pc.close();
+                    
+                } catch (error) {
+                    results.textContent += `  ❌ Erreur: ${error.message}\n`;
+                }
+            }
+            
+            results.textContent += '\n✅ Test terminé!\n';
+            results.textContent += '\nSi vous voyez des candidats "relay", les serveurs TURN fonctionnent.\n';
+            results.textContent += 'Si vous voyez seulement "host" et "srflx", les serveurs TURN sont bloqués.\n';
+        }
+    </script>
+</body>
+</html>

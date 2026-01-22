@@ -29,7 +29,7 @@ app.get('/', (req, res) => {
 app.get('/openapi/interactive/listVhInfo', async (req, res) => {
   console.log('API: listVhInfo');
   try {
-    const response = await axios.get('https://37.64.205.84/openapi/interactive/listVhInfo', {
+    const response = await axios.get('https://10.46.7.1/openapi/interactive/listVhInfo', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers
@@ -47,7 +47,7 @@ app.get('/openapi/interactive/listVhInfo', async (req, res) => {
 app.get('/openapi/signature/gen', async (req, res) => {
   console.log('API: signature/gen');
   try {
-    const response = await axios.get('https://37.64.205.84/openapi/signature/gen', {
+    const response = await axios.get('https://10.46.7.1/openapi/signature/gen', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers
@@ -68,7 +68,7 @@ app.get('/openapi/interactive/listVhResourceWithStatus', async (req, res) => {
   console.log('Headers:', req.headers);
   
   try {
-    const response = await axios.get('https://37.64.205.84/openapi/interactive/listVhResourceWithStatus', {
+    const response = await axios.get('https://10.46.7.1/openapi/interactive/listVhResourceWithStatus', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         'signature': req.headers.signature || req.headers['signature'],
@@ -102,7 +102,7 @@ app.all(/^\/openapi\/(.*)/, async (req, res) => {
   try {
     const response = await axios({
       method: req.method,
-      url: `https://37.64.205.84${path}`,
+      url: `https://10.46.7.1${path}`,
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers,
@@ -127,23 +127,127 @@ app.all(/^\/openapi\/(.*)/, async (req, res) => {
 });
 
 // WebSocket pour la signalisation WebRTC
+const users = new Map(); // Stocker userId -> socketId
+
 io.on('connection', (socket) => {
   console.log('Client connecté:', socket.id);
   
-  socket.on('join', (data) => {
-    const room = data?.room || 'default';
-    socket.join(room);
-    console.log('Join room:', room);
-    socket.emit('joined', { room, userId: socket.id });
+  // Enregistrer l'utilisateur
+  socket.on('register', (data) => {
+    const userId = data.userId;
+    users.set(userId, socket.id);
+    socket.userId = userId;
+    console.log('Utilisateur enregistré:', userId, '-> socket:', socket.id);
+    socket.emit('registered', { userId, socketId: socket.id });
   });
   
-  socket.on('offer', (d) => socket.broadcast.emit('offer', { ...d, sender: socket.id }));
-  socket.on('answer', (d) => socket.broadcast.emit('answer', { ...d, sender: socket.id }));
-  socket.on('ice-candidate', (d) => socket.broadcast.emit('ice-candidate', { ...d, sender: socket.id }));
-  socket.on('candidate', (d) => socket.broadcast.emit('candidate', { ...d, sender: socket.id }));
-  socket.on('message', (d) => socket.broadcast.emit('message', { ...d, sender: socket.id }));
+  // Appel sortant
+  socket.on('call-offer', (data) => {
+    console.log('[SOCKET] call-offer de', data.from, 'vers', data.to);
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('call-offer', data);
+      console.log('[SOCKET] call-offer envoyé à', targetSocketId);
+    } else {
+      console.warn('[SOCKET] Utilisateur', data.to, 'non trouvé');
+    }
+  });
   
-  socket.on('disconnect', () => console.log('Client déconnecté:', socket.id));
+  // Réponse d'appel
+  socket.on('call-answer', (data) => {
+    console.log('[SOCKET] call-answer de', data.from, 'vers', data.to, '| socketId:', socket.id);
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      console.log('[SOCKET] Envoi call-answer à socketId:', targetSocketId);
+      io.to(targetSocketId).emit('call-answer', data);
+    } else {
+      console.warn('[SOCKET] Utilisateur', data.to, 'non trouvé pour call-answer');
+    }
+  });
+  
+  // Candidats ICE
+  socket.on('ice-candidate', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('ice-candidate', data);
+    }
+  });
+  
+  // Fin d'appel
+  socket.on('call-ended', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('call-ended', data);
+    }
+  });
+  
+  // Appel rejeté
+  socket.on('call-rejected', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('call-rejected', data);
+    }
+  });
+  
+  // Toggle audio/video
+  socket.on('toggle-audio', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('toggle-audio', data);
+    }
+  });
+  
+  socket.on('toggle-video', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('toggle-video', data);
+    }
+  });
+  
+  // Partage d'écran
+  socket.on('screen-share-started', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('screen-share-started', data);
+    }
+  });
+  
+  socket.on('screen-share-stopped', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('screen-share-stopped', data);
+    }
+  });
+  
+  // Enregistrement
+  socket.on('request-record-permission', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('request-record-permission', data);
+    }
+  });
+  
+  socket.on('record-permission-response', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('record-permission-response', data);
+    }
+  });
+  
+  socket.on('recording-status-changed', (data) => {
+    const targetSocketId = users.get(data.to);
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('recording-status-changed', data);
+    }
+  });
+  
+  socket.on('disconnect', () => {
+    if (socket.userId) {
+      users.delete(socket.userId);
+      console.log('Utilisateur déconnecté:', socket.userId);
+    }
+    console.log('Client déconnecté:', socket.id);
+  });
 });
 
 server.listen(PORT, () => {

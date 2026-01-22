@@ -140,7 +140,7 @@ setTimeout(() => initAvatar(), 15000);
 Charger l'avatar dans un iframe séparé pour isoler les ressources.
 
 **Problème Rencontré**
-1. **Certificat SSL Invalide** : L'iframe ne peut pas appeler directement `https://37.64.205.84`
+1. **Certificat SSL Invalide** : L'iframe ne peut pas appeler directement `https://10.46.7.1`
 2. **Intercepteurs Complexes** : Nécessite d'intercepter XMLHttpRequest, fetch, WebSocket
 3. **Pas d'Isolation Réelle** : Les connexions réseau ne sont PAS isolées au niveau du navigateur
 

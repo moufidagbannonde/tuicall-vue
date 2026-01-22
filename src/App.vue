@@ -34,6 +34,7 @@
       :is-video-call="isVideoCall" :call-status="callStatus" :is-incoming="isIncomingCall" @call-ended="handleCallEnded"
       :initial-local-stream="localStream" @call-status-change="handleCallStatusChange"
       @video-disabled="handleVideoDisabled" :user-role="userRole" />
+
     <!-- Incoming Call Modal -->
     <div v-if="callStatus === 'incoming'"
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -227,10 +228,16 @@ const initializeConnection = (userId) => {
   currentUserId.value = userId;
 
   // Initialiser la connexion socket
-  socket.value = io("https://meilleursforfaitsmobiles.fr/backend");
-  // socket.value = io("http://localhost:8081");
+socket.value = io("https://webcall.vippinterstis.com:8000", {
+    path: "/backend/socket.io",
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  secure: true
+});
+
 
   socket.value.on("connect", () => {
+    console.log("Socket connected:", socket.value.id);
     // Déterminer le type d'utilisateur
     const role = new URLSearchParams(window.location.search).get("role");
     const userType = role || "unknown";
