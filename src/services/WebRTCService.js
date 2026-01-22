@@ -20,6 +20,24 @@ class WebRTCService {
     this.configuration = {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        // Serveurs TURN publics fiables
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443?transport=tcp",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        // Votre serveur TURN (en backup)
         {
           urls: "turn:37.64.205.85:3478",
           username: "webrtc",
@@ -34,6 +52,7 @@ class WebRTCService {
       iceCandidatePoolSize: 10,
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
+      iceTransportPolicy: 'all'
     };
   }
 
@@ -71,7 +90,10 @@ class WebRTCService {
           type: event.candidate.type,
           protocol: event.candidate.protocol,
           address: event.candidate.address,
-          port: event.candidate.port
+          port: event.candidate.port,
+          priority: event.candidate.priority,
+          relatedAddress: event.candidate.relatedAddress,
+          relatedPort: event.candidate.relatedPort
         });
         
         if (this.socket && this.remoteUserId) {
@@ -122,9 +144,17 @@ class WebRTCService {
       if (state === 'connected' || state === 'completed') {
         console.log('[ICE] ✅ Connexion ICE établie');
       } else if (state === 'failed') {
-        console.error('[ICE] ❌ ICE échoué');
+        console.error('[ICE] ❌ ICE échoué, tentative de redémarrage ICE...');
+        this.restartIce();
       } else if (state === 'disconnected') {
-        console.warn('[ICE] ⚠️ ICE disconnected');
+        console.warn('[ICE] ⚠️ ICE disconnected, attente de reconnexion...');
+        // Attendre 5 secondes avant de redémarrer ICE
+        setTimeout(() => {
+          if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
+            console.log('[ICE] Toujours déconnecté, redémarrage ICE...');
+            this.restartIce();
+          }
+        }, 5000);
       }
     };
 
@@ -149,6 +179,35 @@ class WebRTCService {
 
   setOnIceCandidateCallback(callback) {
     this.onIceCandidateCallback = callback;
+  }
+
+  async restartIce() {
+    if (!this.peerConnection || this.isNegotiating) {
+      console.log('[ICE] Impossible de redémarrer ICE maintenant');
+      return;
+    }
+
+    try {
+      console.log('[ICE] 🔄 Redémarrage ICE...');
+      this.isNegotiating = true;
+      this.pendingCandidates = [];
+
+      const offer = await this.peerConnection.createOffer({ iceRestart: true });
+      await this.peerConnection.setLocalDescription(offer);
+
+      if (this.socket && this.remoteUserId) {
+        this.socket.emit("ice-restart", {
+          offer: offer,
+          to: this.remoteUserId,
+          from: this.currentUserId,
+        });
+      }
+
+      console.log('[ICE] ✅ Offre de redémarrage ICE envoyée');
+    } catch (error) {
+      console.error('[ICE] ❌ Erreur redémarrage ICE:', error);
+      this.isNegotiating = false;
+    }
   }
 
   async getLocalMedia(withVideo) {
@@ -275,6 +334,7 @@ class WebRTCService {
     this.socket.off('call-ended');
     this.socket.off('media-state-change');
     this.socket.off('call-rejected');
+    this.socket.off('ice-restart');
     this.socket.off('error');
 
     this.pendingCandidates = [];
@@ -298,21 +358,29 @@ class WebRTCService {
     this.socket.on("ice-candidate", async (data) => {
       if (data.to === this.currentUserId && this.peerConnection) {
         try {
-          if (this.peerConnection.remoteDescription && this.peerConnection.remoteDescription.type) {
+          // Vérifier que la remote description est définie ET que ce n'est pas une négociation en cours
+          if (this.peerConnection.remoteDescription && 
+              this.peerConnection.remoteDescription.type &&
+              !this.isNegotiating) {
             await this.peerConnection.addIceCandidate(
               new RTCIceCandidate(data.candidate)
             );
             console.log('[ICE] Candidat ajouté');
           } else {
-            console.log('[ICE] Candidat en attente');
-            this.pendingCandidates.push(data.candidate);
+            // Ignorer les candidats pendant la négociation ou sans remote description
+            if (this.isNegotiating) {
+              console.log('[ICE] Candidat ignoré (négociation en cours)');
+            } else {
+              console.log('[ICE] Candidat en attente (pas de remote description)');
+              this.pendingCandidates.push(data.candidate);
+            }
           }
 
           if (this.onIceCandidateCallback) {
             this.onIceCandidateCallback(data.candidate);
           }
         } catch (error) {
-          console.error("[ICE] Erreur ajout candidat:", error);
+          console.error("[ICE] Erreur ajout candidat:", error.message);
         }
       }
     });
@@ -369,6 +437,54 @@ class WebRTCService {
           this.onCallStatusChangeCallback("rejected", data.from, false);
         }
         this.resetCall();
+      }
+    });
+
+    this.socket.on("ice-restart", async (data) => {
+      if (data.to === this.currentUserId && this.peerConnection) {
+        try {
+          console.log('[ICE] 🔄 Reçu demande de redémarrage ICE');
+          
+          // IMPORTANT: Vider les candidats en attente
+          this.pendingCandidates = [];
+          
+          await this.peerConnection.setRemoteDescription(
+            new RTCSessionDescription(data.offer)
+          );
+          
+          const answer = await this.peerConnection.createAnswer();
+          await this.peerConnection.setLocalDescription(answer);
+          
+          this.socket.emit("ice-restart-answer", {
+            answer: answer,
+            to: data.from,
+            from: this.currentUserId,
+          });
+          
+          console.log('[ICE] ✅ Réponse de redémarrage ICE envoyée');
+        } catch (error) {
+          console.error('[ICE] ❌ Erreur lors du redémarrage ICE:', error);
+        }
+      }
+    });
+
+    this.socket.on("ice-restart-answer", async (data) => {
+      if (data.to === this.currentUserId && this.peerConnection) {
+        try {
+          console.log('[ICE] 🔄 Reçu réponse de redémarrage ICE');
+          
+          // IMPORTANT: Vider les candidats en attente
+          this.pendingCandidates = [];
+          
+          await this.peerConnection.setRemoteDescription(
+            new RTCSessionDescription(data.answer)
+          );
+          this.isNegotiating = false;
+          console.log('[ICE] ✅ Redémarrage ICE terminé');
+        } catch (error) {
+          console.error('[ICE] ❌ Erreur réponse redémarrage ICE:', error);
+          this.isNegotiating = false;
+        }
       }
     });
 

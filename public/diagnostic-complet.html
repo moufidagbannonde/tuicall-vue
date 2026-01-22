@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Diagnostic Réseau vs Navigateur</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #fff; }
+        .test { margin: 15px 0; padding: 15px; border-radius: 5px; background: #2d2d2d; }
+        .pass { border-left: 5px solid #4caf50; }
+        .fail { border-left: 5px solid #f44336; }
+        .warn { border-left: 5px solid #ff9800; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #4caf50; color: white; border: none; border-radius: 5px; }
+        button:hover { background: #45a049; }
+        pre { background: #000; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Diagnostic: Réseau vs Navigateur</h1>
+    <button onclick="runAllTests()">▶️ LANCER TOUS LES TESTS</button>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+
+        function addResult(title, status, details) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `
+                <h3>${status === 'pass' ? '✅' : status === 'fail' ? '❌' : '⚠️'} ${title}</h3>
+                <pre>${details}</pre>
+            `;
+            results.appendChild(div);
+        }
+
+        // TEST 1: Connexion Internet basique
+        async function testInternet() {
+            try {
+                const start = Date.now();
+                const response = await fetch('https://www.google.com', { mode: 'no-cors' });
+                const time = Date.now() - start;
+                addResult('Test 1: Connexion Internet', 'pass', 
+                    `Internet fonctionne (${time}ms)\nSi ce test échoue → Pas d'internet`);
+            } catch (error) {
+                addResult('Test 1: Connexion Internet', 'fail', 
+                    `Erreur: ${error.message}\n❌ PAS D'INTERNET`);
+            }
+        }
+
+        // TEST 2: Accès aux serveurs STUN
+        async function testSTUN() {
+            try {
+                const pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                
+                let stunFound = false;
+                
+                pc.onicecandidate = (e) => {
+                    if (e.candidate && e.candidate.type === 'srflx') {
+                        stunFound = true;
+                        addResult('Test 2: Serveurs STUN', 'pass', 
+                            `STUN fonctionne\nIP publique: ${e.candidate.address}\nSi ce test échoue → Firewall bloque UDP`);
+                        pc.close();
+                    }
+                };
+
+                const offer = await pc.createOffer({ offerToReceiveAudio: true });
+                await pc.setLocalDescription(offer);
+
+                setTimeout(() => {
+                    if (!stunFound) {
+                        addResult('Test 2: Serveurs STUN', 'fail', 
+                            `Aucun candidat STUN\n❌ FIREWALL BLOQUE UDP`);
+                        pc.close();
+                    }
+                }, 5000);
+            } catch (error) {
+                addResult('Test 2: Serveurs STUN', 'fail', `Erreur: ${error.message}`);
+            }
+        }
+
+        // TEST 3: Accès aux serveurs TURN
+        async function testTURN() {
+            try {
+                const pc = new RTCPeerConnection({
+                    iceServers: [
+                        {
+                            urls: ['turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        }
+                    ]
+                });
+                
+                let turnFound = false;
+                
+                pc.onicecandidate = (e) => {
+                    if (e.candidate && e.candidate.type === 'relay') {
+                        turnFound = true;
+                        addResult('Test 3: Serveurs TURN', 'pass', 
+                            `TURN fonctionne\nServeur: ${e.candidate.address}\n✅ APPEL DEVRAIT MARCHER`);
+                        pc.close();
+                    }
+                };
+
+                const offer = await pc.createOffer({ offerToReceiveAudio: true });
+                await pc.setLocalDescription(offer);
+
+                setTimeout(() => {
+                    if (!turnFound) {
+                        addResult('Test 3: Serveurs TURN', 'fail', 
+                            `Aucun candidat TURN\n❌ PROBLÈME RÉSEAU: Firewall/Proxy bloque TURN\n\n🔧 SOLUTIONS:\n1. Tester depuis 4G/5G\n2. Utiliser un VPN\n3. Contacter admin réseau`);
+                        pc.close();
+                    }
+                }, 8000);
+            } catch (error) {
+                addResult('Test 3: Serveurs TURN', 'fail', `Erreur: ${error.message}`);
+            }
+        }
+
+        // TEST 4: Permissions navigateur
+        async function testPermissions() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                stream.getTracks().forEach(track => track.stop());
+                addResult('Test 4: Permissions Navigateur', 'pass', 
+                    `Caméra et micro accessibles\nSi ce test échoue → Problème de permissions`);
+            } catch (error) {
+                if (error.name === 'NotAllowedError') {
+                    addResult('Test 4: Permissions Navigateur', 'fail', 
+                        `❌ PERMISSIONS REFUSÉES\nClic sur l'icône 🔒 dans la barre d'adresse\nAutoriser caméra et micro`);
+                } else if (error.name === 'NotFoundError') {
+                    addResult('Test 4: Permissions Navigateur', 'fail', 
+                        `❌ PÉRIPHÉRIQUES NON TROUVÉS\nVérifier que caméra/micro sont branchés`);
+                } else {
+                    addResult('Test 4: Permissions Navigateur', 'fail', `Erreur: ${error.message}`);
+                }
+            }
+        }
+
+        // TEST 5: WebRTC supporté
+        function testWebRTCSupport() {
+            const supported = !!(window.RTCPeerConnection && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+            if (supported) {
+                addResult('Test 5: Support WebRTC', 'pass', 
+                    `Navigateur compatible WebRTC\nNavigateur: ${navigator.userAgent.split(' ').pop()}`);
+            } else {
+                addResult('Test 5: Support WebRTC', 'fail', 
+                    `❌ NAVIGATEUR NON COMPATIBLE\nUtiliser Chrome, Firefox ou Edge récent`);
+            }
+        }
+
+        // TEST 6: Connexion HTTPS
+        function testHTTPS() {
+            if (location.protocol === 'https:' || location.hostname === 'localhost') {
+                addResult('Test 6: Connexion Sécurisée', 'pass', 
+                    `HTTPS ou localhost\nWebRTC nécessite HTTPS (sauf localhost)`);
+            } else {
+                addResult('Test 6: Connexion Sécurisée', 'warn', 
+                    `⚠️ HTTP détecté\nWebRTC peut ne pas fonctionner\nUtiliser HTTPS en production`);
+            }
+        }
+
+        // TEST 7: Ping serveurs TURN (via fetch)
+        async function testTURNReachability() {
+            const servers = [
+                'https://openrelay.metered.ca',
+                'https://relay1.expressturn.com'
+            ];
+
+            for (const server of servers) {
+                try {
+                    const start = Date.now();
+                    await fetch(server, { mode: 'no-cors' });
+                    const time = Date.now() - start;
+                    addResult(`Test 7: Accès ${server}`, 'pass', 
+                        `Serveur accessible (${time}ms)`);
+                } catch (error) {
+                    addResult(`Test 7: Accès ${server}`, 'fail', 
+                        `❌ SERVEUR INACCESSIBLE\nProxy/Firewall bloque ce domaine`);
+                }
+            }
+        }
+
+        async function runAllTests() {
+            results.innerHTML = '<h2>⏳ Tests en cours...</h2>';
+            
+            testWebRTCSupport();
+            testHTTPS();
+            await testInternet();
+            await testPermissions();
+            await testTURNReachability();
+            await testSTUN();
+            await testTURN();
+
+            results.innerHTML += `
+                <div class="test warn">
+                    <h3>📊 INTERPRÉTATION</h3>
+                    <pre>
+Si TOUS les tests passent sauf TURN:
+→ ❌ PROBLÈME RÉSEAU (firewall/proxy)
+→ Solution: Tester depuis 4G/5G ou VPN
+
+Si test Permissions échoue:
+→ ❌ PROBLÈME NAVIGATEUR
+→ Solution: Autoriser caméra/micro
+
+Si test Internet échoue:
+→ ❌ PAS DE CONNEXION
+→ Solution: Vérifier votre connexion
+
+Si TURN passe:
+→ ✅ TOUT FONCTIONNE
+→ L'appel devrait marcher
+                    </pre>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
