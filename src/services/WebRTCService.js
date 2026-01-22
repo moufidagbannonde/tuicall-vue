@@ -15,7 +15,7 @@ class WebRTCService {
     this.onIceCandidateCallback = null;
     this.answerReceived = false;
     this.pendingCandidates = [];
-    this.isNegotiating = false; // NOUVEAU : éviter les re-négociations simultanées
+    this.isNegotiating = false;
 
     this.configuration = {
       iceServers: [
@@ -29,7 +29,7 @@ class WebRTCService {
           urls: "turn:37.64.205.85:3478?transport=tcp",
           username: "webrtc",
           credential: "VippInterstis@123",
-        },
+        }
       ],
       iceCandidatePoolSize: 10,
       bundlePolicy: 'max-bundle',
@@ -66,19 +66,23 @@ class WebRTCService {
     this.peerConnection = new RTCPeerConnection(this.configuration);
 
     this.peerConnection.onicecandidate = (event) => {
-      if (event.candidate && this.socket && this.remoteUserId) {
-        const type = event.candidate.type;
-        const protocol = event.candidate.protocol;
-        const address = event.candidate.address || 'N/A';
-        console.log(`[ICE] Envoi candidat: ${type} | Protocol: ${protocol} | IP: ${address}`);
-        
-        this.socket.emit("ice-candidate", {
-          candidate: event.candidate,
-          to: this.remoteUserId,
-          from: this.currentUserId,
+      if (event.candidate) {
+        console.log(`[ICE] Candidat généré:`, {
+          type: event.candidate.type,
+          protocol: event.candidate.protocol,
+          address: event.candidate.address,
+          port: event.candidate.port
         });
-      } else if (!event.candidate) {
-        console.log('[ICE] Tous les candidats envoyés');
+        
+        if (this.socket && this.remoteUserId) {
+          this.socket.emit("ice-candidate", {
+            candidate: event.candidate,
+            to: this.remoteUserId,
+            from: this.currentUserId,
+          });
+        }
+      } else {
+        console.log('[ICE] ✅ Tous les candidats envoyés');
       }
     };
 
@@ -98,7 +102,7 @@ class WebRTCService {
       console.log('[WebRTC] Connection state:', state);
       
       if (state === 'connected') {
-        this.isNegotiating = false; // Réinitialiser le flag
+        this.isNegotiating = false;
         if (this.onCallStatusChangeCallback) {
           this.onCallStatusChangeCallback('connected', this.remoteUserId, this.isVideoEnabled);
         }
@@ -107,8 +111,7 @@ class WebRTCService {
           this.onCallStatusChangeCallback('ended', this.remoteUserId, false);
         }
       } else if (state === 'failed') {
-        console.error('[WebRTC] ❌ Connexion échouée - redémarrage ICE...');
-        this.restartIce();
+        console.error('[WebRTC] ❌ Connexion échouée');
       }
     };
 
@@ -119,20 +122,9 @@ class WebRTCService {
       if (state === 'connected' || state === 'completed') {
         console.log('[ICE] ✅ Connexion ICE établie');
       } else if (state === 'failed') {
-        console.error('[ICE] ❌ ICE échoué - attente avant restart...');
-        setTimeout(() => {
-          if (this.peerConnection && this.peerConnection.iceConnectionState === 'failed') {
-            this.restartIce();
-          }
-        }, 2000);
+        console.error('[ICE] ❌ ICE échoué');
       } else if (state === 'disconnected') {
-        console.warn('[ICE] ⚠️ ICE disconnected - attente reconnexion...');
-        setTimeout(() => {
-          if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
-            console.log('[ICE] Toujours disconnected - tentative de reconnexion');
-            this.restartIce();
-          }
-        }, 5000);
+        console.warn('[ICE] ⚠️ ICE disconnected');
       }
     };
 
@@ -140,15 +132,12 @@ class WebRTCService {
       console.log('[ICE] Gathering state:', this.peerConnection.iceGatheringState);
     };
 
-    // NOUVEAU : Gérer les renégociations
     this.peerConnection.onnegotiationneeded = async () => {
       if (this.isNegotiating) {
         console.log('[NEGOTIATION] Déjà en cours, ignoré');
         return;
       }
-
       console.log('[NEGOTIATION] Négociation nécessaire');
-      // La renégociation sera gérée par restartIce() si nécessaire
     };
 
     if (this.localStream) {
@@ -160,34 +149,6 @@ class WebRTCService {
 
   setOnIceCandidateCallback(callback) {
     this.onIceCandidateCallback = callback;
-  }
-
-  async restartIce() {
-    if (!this.peerConnection || this.isNegotiating) {
-      console.log('[ICE] Restart ignoré (pas de PC ou déjà en cours)');
-      return;
-    }
-    
-    try {
-      console.log('[ICE] 🔄 Redémarrage de la négociation ICE...');
-      this.isNegotiating = true;
-      
-      const offer = await this.peerConnection.createOffer({ iceRestart: true });
-      await this.peerConnection.setLocalDescription(offer);
-      
-      if (this.socket && this.remoteUserId) {
-        this.socket.emit('call-offer', {
-          offer: offer,
-          to: this.remoteUserId,
-          from: this.currentUserId,
-          withVideo: this.isVideoEnabled,
-          isIceRestart: true // NOUVEAU : indiquer qu'il s'agit d'un restart
-        });
-      }
-    } catch (error) {
-      console.error('[ICE] ❌ Erreur lors du restart:', error);
-      this.isNegotiating = false;
-    }
   }
 
   async getLocalMedia(withVideo) {
@@ -268,7 +229,7 @@ class WebRTCService {
       this.isCallActive = true;
       this.isVideoEnabled = withVideo;
       this.answerReceived = false;
-      this.isNegotiating = true; // NOUVEAU
+      this.isNegotiating = true;
       
       this.initPeerConnection();
 
@@ -308,7 +269,6 @@ class WebRTCService {
   async setupSocketListeners() {
     if (!this.socket) return;
 
-    // CRITIQUE : Retirer les anciens écouteurs pour éviter les doublons
     this.socket.off('call-offer');
     this.socket.off('ice-candidate');
     this.socket.off('call-answer');
@@ -321,31 +281,6 @@ class WebRTCService {
 
     this.socket.on("call-offer", async (data) => {
       if (data.to === this.currentUserId) {
-        // NOUVEAU : Gérer les ICE restarts
-        if (data.isIceRestart && this.peerConnection) {
-          console.log('[OFFER] ICE Restart reçu');
-          try {
-            await this.peerConnection.setRemoteDescription(
-              new RTCSessionDescription(data.offer)
-            );
-            
-            const answer = await this.peerConnection.createAnswer();
-            await this.peerConnection.setLocalDescription(answer);
-            
-            this.socket.emit("call-answer", {
-              answer: this.peerConnection.localDescription,
-              to: data.from,
-              from: this.currentUserId,
-              withVideo: this.isVideoEnabled,
-            });
-            
-            this.isNegotiating = false;
-          } catch (error) {
-            console.error('[OFFER] Erreur ICE restart:', error);
-          }
-          return;
-        }
-
         this.remoteUserId = data.from;
         this.isVideoEnabled = data.withVideo;
         this.pendingOffer = data.offer;
@@ -367,7 +302,7 @@ class WebRTCService {
             await this.peerConnection.addIceCandidate(
               new RTCIceCandidate(data.candidate)
             );
-            console.log('[ICE] Candidat ajouté:', data.candidate.type);
+            console.log('[ICE] Candidat ajouté');
           } else {
             console.log('[ICE] Candidat en attente');
             this.pendingCandidates.push(data.candidate);
@@ -388,46 +323,24 @@ class WebRTCService {
       }
       
       const state = this.peerConnection.signalingState;
-      console.log('[ANSWER] Réception, état:', state, 'answerReceived:', this.answerReceived);
+      console.log('[ANSWER] Réception, état:', state);
       
-      // PROTECTION 1 : Vérifier si on a déjà reçu une réponse
-      if (this.answerReceived) {
-        console.log('[ANSWER] ⚠️ Doublon ignoré (déjà traité)');
+      if (this.answerReceived || state !== 'have-local-offer') {
+        console.log('[ANSWER] ⚠️ Ignoré');
         return;
       }
       
-      // PROTECTION 2 : Accepter seulement si on est en "have-local-offer"
-      if (state !== 'have-local-offer') {
-        console.log('[ANSWER] ⚠️ État invalide (' + state + '), ignoré');
-        return;
-      }
-      
-      // PROTECTION 3 : Marquer immédiatement comme reçu AVANT le traitement
       this.answerReceived = true;
+      this.pendingCandidates = [];
       
       try {
         await this.peerConnection.setRemoteDescription(
           new RTCSessionDescription(data.answer)
         );
-        
         this.isNegotiating = false;
         console.log('[ANSWER] ✅ Remote description définie');
-
-        // Ajouter les candidats en attente
-        console.log('[ANSWER] Ajout de', this.pendingCandidates.length, 'candidats en attente');
-        for (const candidate of this.pendingCandidates) {
-          try {
-            await this.peerConnection.addIceCandidate(
-              new RTCIceCandidate(candidate)
-            );
-          } catch (e) {
-            console.error('[ICE] Erreur ajout candidat:', e);
-          }
-        }
-        this.pendingCandidates = [];
       } catch (error) {
         console.error('[ANSWER] ❌ Erreur:', error);
-        // Ne PAS réinitialiser answerReceived pour éviter de retraiter
         this.isNegotiating = false;
       }
     });
@@ -597,7 +510,7 @@ class WebRTCService {
     this.remoteUserId = null;
     this.pendingOffer = null;
     this.answerReceived = false;
-    this.isNegotiating = false; // NOUVEAU
+    this.isNegotiating = false;
 
     if (this.onCallStatusChangeCallback) {
       this.onCallStatusChangeCallback("idle", null, false);

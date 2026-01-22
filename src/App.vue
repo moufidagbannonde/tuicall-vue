@@ -285,9 +285,8 @@ socket.value = io("https://webcall.vippinterstis.com:8000", {
           isInCall.value = true;
           isIncomingCall.value = false;
 
-          // Puis lancer l'appel
-          handleCallInitiation(data.clientId, true);
-          WebRTCService.makeCall(data.clientId, true);
+          // L'appel sera lancé automatiquement par CallView.vue via onMounted
+          // qui détecte callStatus === 'outgoing'
         } catch (error) {
           console.error("Erreur lors de la préparation de l'appel automatique:", error);
           alert(

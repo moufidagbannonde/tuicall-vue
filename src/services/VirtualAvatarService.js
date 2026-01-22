@@ -68,10 +68,10 @@ const loadSDK = () => {
       if (import.meta.env.DEV && window.axios) {
         console.log('[SDK] Installation de l\'intercepteur Axios...');
         window.axios.interceptors.request.use((config) => {
-          if (config.url?.includes('10.46.7.1')) {
+          if (config.url?.includes('37.64.205.84')) {
             const originalUrl = config.url;
-            config.url = config.url.replace('https://10.46.7.1', window.location.origin);
-            config.baseURL = config.baseURL?.replace('https://10.46.7.1', window.location.origin) || '';
+            config.url = config.url.replace('https://37.64.205.84', window.location.origin);
+            config.baseURL = config.baseURL?.replace('https://37.64.205.84', window.location.origin) || '';
             console.log('[SDK INTERCEPTOR] Axios réécrit:', originalUrl, '→', config.url);
           }
           return config;
@@ -96,7 +96,7 @@ class VirtualAvatarService {
     this.isInitialized = false;
     this.audioProcessor = null;
     this.audioSource = null;
-    this.baseUrl = 'https://10.46.7.1';
+    this.baseUrl = 'https://37.64.205.84';
     this.subscriptionKey = import.meta.env.VITE_APP_SUBSCRIPTION_KEY || 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9';
     this.initTimeout = null;
     this.connectionState = 'idle';
@@ -374,7 +374,7 @@ class VirtualAvatarService {
               host: window.location.host,
             } : {
               protocol: 'https',
-              host: '10.46.7.1'
+              host: '37.64.205.84'
             },
             ...(isDevelopment && { baseURL: window.location.origin }),
             onError: (code, msg) => {

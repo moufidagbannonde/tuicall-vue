@@ -121,7 +121,7 @@ if (import.meta.env.DEV && !window.__websocketInterceptorInstalled) {
   // Test de l'intercepteur
   console.log('[INTERCEPTOR INIT] 🧪 Test de l\'intercepteur...');
   try {
-    const testUrl = 'wss://10.46.7.1/test';
+    const testUrl = 'wss://37.64.205.84/test';
     const ws = new window.WebSocket(testUrl);
     ws.close();
     console.log('[INTERCEPTOR INIT] ✓ Test réussi - l\'intercepteur fonctionne');

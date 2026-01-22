@@ -50,8 +50,8 @@
     @canplay="() => console.log('[VIDEO] Peut jouer')"
   ></video>
   
-  <!-- Avatar SDK UNIQUEMENT pour le client (COMMENTÉ) -->
-  <!-- <div v-if="userRole === 'client' && remoteStream" class="agent-avatar-container"></div> -->
+  <!-- Avatar SDK UNIQUEMENT pour le client -->
+  <div v-if="userRole === 'client' && remoteStream" class="agent-avatar-container"></div>
 </div>
 
     <!-- flux de partage d'écran -->
@@ -271,7 +271,7 @@ import { ref, onMounted, onUnmounted, watch, computed, nextTick } from "vue";
 import WebRTCService from "../services/WebRTCService";
 import { useToast } from "vue-toastification";
 import Peer from "peerjs";
-// import VirtualAvatarService from '../services/VirtualAvatarService';
+import VirtualAvatarService from '../services/VirtualAvatarService';
 
 const iceCandidateReceived = ref(false);
 /**
@@ -295,8 +295,8 @@ const remotePeerConnection = ref(null);
 const screenSharingActive = ref(false);
 const screenShareVideo = ref(null);
 const awaitingRecordPermission = ref(false);
-// const virtualHumanReady = ref(false);
-// const useVirtualAvatar = ref(true);
+const virtualHumanReady = ref(false);
+const useVirtualAvatar = ref(true);
 // événements à émettre
 const emit = defineEmits([
   "call-ended",
@@ -788,65 +788,71 @@ onMounted(async () => {
   
 });
 
-// ========== LOGIQUE AVATAR COMMENTÉE ==========
+// ========== LOGIQUE AVATAR ==========
 // Watcher pour initialiser l'avatar UNIQUEMENT pour le client
-// let avatarInitTimeout = null;
-// let avatarInitialized = false;
-// let avatarInitAttempts = 0;
-// let webrtcStableTimeout = null;
-// const MAX_INIT_ATTEMPTS = 3;
+let avatarInitTimeout = null;
+let avatarInitialized = false;
+let avatarInitAttempts = 0;
+let webrtcStableTimeout = null;
+const MAX_INIT_ATTEMPTS = 3;
 
 // Fonction pour vérifier si WebRTC est stable
+const isWebRTCStable = () => {
+  // Simplifier : si l'appel est connecté et les flux existent, c'est bon
+  return currentCallStatus.value === 'connected' && 
+         remoteStream.value && 
+         localStream.value;
+};
 // const isWebRTCStable = () => {
 //   if (WebRTCService.peerConnection) {
 //     const pc = WebRTCService.peerConnection;
 //     const iceState = pc.iceConnectionState;
 //     const connState = pc.connectionState;
-//     
+//     console.log('[WEBRTC] ICE State:', iceState, '| Conn State:', connState);
+    
 //     console.log('[WEBRTC CHECK]', {
 //       iceState,
 //       connState,
 //       isStable: (iceState === 'connected' || iceState === 'completed') && 
 //                 (connState === 'connected')
 //     });
-//     
+    
 //     return (iceState === 'connected' || iceState === 'completed') && 
 //            (connState === 'connected');
 //   }
-//   
+  
 //   return false;
 // };
 
 // Fonction pour vérifier si le flux est vraiment prêt
-// const isStreamReady = (stream) => {
-//   if (!stream) return false;
-//   
-//   const audioTracks = stream.getAudioTracks();
-//   if (audioTracks.length === 0) {
-//     console.log('[AVATAR] ⚠️ Aucune piste audio dans le flux');
-//     return false;
-//   }
-//   
-//   const activeAudioTrack = audioTracks.find(track => 
-//     track.readyState === 'live' && track.enabled
-//   );
-//   
-//   if (!activeAudioTrack) {
-//     console.log('[AVATAR] ⚠️ Aucune piste audio active');
-//     return false;
-//   }
-//   
-//   console.log('[AVATAR] ✅ Flux audio prêt:', {
-//     trackCount: audioTracks.length,
-//     trackState: activeAudioTrack.readyState,
-//     trackEnabled: activeAudioTrack.enabled
-//   });
-//   
-//   return true;
-// };
+const isStreamReady = (stream) => {
+  if (!stream) return false;
+  
+  const audioTracks = stream.getAudioTracks();
+  if (audioTracks.length === 0) {
+    console.log('[AVATAR] ⚠️ Aucune piste audio dans le flux');
+    return false;
+  }
+  
+  const activeAudioTrack = audioTracks.find(track => 
+    track.readyState === 'live' && track.enabled
+  );
+  
+  if (!activeAudioTrack) {
+    console.log('[AVATAR] ⚠️ Aucune piste audio active');
+    return false;
+  }
+  
+  console.log('[AVATAR] ✅ Flux audio prêt:', {
+    trackCount: audioTracks.length,
+    trackState: activeAudioTrack.readyState,
+    trackEnabled: activeAudioTrack.enabled
+  });
+  
+  return true;
+};
 
-// Fonction d'initialisation de l'avatar avec retry amélioré (COMMENTÉE)
-/*
+// Fonction d'initialisation de l'avatar avec retry amélioré
 const initAvatar = async (retryCount = 0) => {
   const attemptNum = retryCount + 1;
   
@@ -970,13 +976,11 @@ const initAvatar = async (retryCount = 0) => {
     }
   }
 };
-*/
 
-// Watcher amélioré : attendre que WebRTC soit VRAIMENT stable (COMMENTÉ)
-// Watcher amélioré : vérifier AUSSI le flux local (micro du client) (COMMENTÉ)
-// let initDebounceTimeout = null;
+// Watcher amélioré : attendre que WebRTC soit VRAIMENT stable
+// Watcher amélioré : vérifier AUSSI le flux local (micro du client)
+let initDebounceTimeout = null;
 
-/*
 watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], [oldStatus, oldRemote, oldLocal]) => {
   console.log('[AVATAR TRIGGER]', {
     status,
@@ -1027,7 +1031,7 @@ watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], 
         console.log('[AVATAR] ✅ WebRTC stable détecté');
         
         // Attendre encore 10 secondes supplémentaires pour sécurité
-        const EXTRA_DELAY = 10000;
+        const EXTRA_DELAY = 5000;
         console.log(`[AVATAR] ⏳ Attente de sécurité de ${EXTRA_DELAY/1000}s...`);
         toast.info(`Préparation de l'avatar... (${EXTRA_DELAY/1000}s)`, { timeout: EXTRA_DELAY });
         
@@ -1038,7 +1042,7 @@ watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], 
               isWebRTCStable()) {
             console.log('[AVATAR] 🚀 Lancement de l\'initialisation');
             initAvatar(0);
-          } else {
+          } else { EXTRA_DELAY = 5000;
             console.log('[AVATAR] ⚠️ Conditions perdues après attente');
           }
         }, EXTRA_DELAY);
@@ -1088,10 +1092,8 @@ watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], 
     }
   }
 }, { immediate: true });
-*/
 
-// Nettoyage au démontage (COMMENTÉ - logique avatar)
-/*
+// Nettoyage au démontage (logique avatar)
 onUnmounted(() => {
   if (initDebounceTimeout) {
     clearTimeout(initDebounceTimeout);
@@ -1113,7 +1115,6 @@ onUnmounted(() => {
   
   VirtualAvatarService.destroy();
 });
-*/
 
 /**
  *  surveille les changements des éléments vidéo et des flux associés.
@@ -1778,7 +1779,7 @@ const toggleVideo = () => {
   font-size: 1.2rem;
 }
 
-/* Style pour l'avatar (COMMENTÉ)
+/* Style pour l'avatar */
 .agent-avatar-container {
   width: 100%;
   height: 100%;
@@ -1827,5 +1828,4 @@ const toggleVideo = () => {
   left: 0;
   background: #000;
 }
-*/
 </style>

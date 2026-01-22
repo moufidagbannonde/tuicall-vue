@@ -7,7 +7,7 @@ const https = require('https');
 
 const app = express();
 const server = http.createServer(app);
-const PORT = 8080;
+const PORT = 8000;
 
 app.use(cors());
 app.use(express.json());
@@ -22,14 +22,14 @@ const io = socketIO(server, {
 });
 
 app.get('/', (req, res) => {
-  res.send('<h1>Serveur actif</h1><p>Port: 8080</p>');
+  res.send('<h1>Serveur actif</h1><p>Port: 8000</p>');
 });
 
 // Route 1: Liste des Virtual Humans
 app.get('/openapi/interactive/listVhInfo', async (req, res) => {
   console.log('API: listVhInfo');
   try {
-    const response = await axios.get('https://10.46.7.1/openapi/interactive/listVhInfo', {
+    const response = await axios.get('https://37.64.205.84/openapi/interactive/listVhInfo', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers
@@ -47,7 +47,7 @@ app.get('/openapi/interactive/listVhInfo', async (req, res) => {
 app.get('/openapi/signature/gen', async (req, res) => {
   console.log('API: signature/gen');
   try {
-    const response = await axios.get('https://10.46.7.1/openapi/signature/gen', {
+    const response = await axios.get('https://37.64.205.84/openapi/signature/gen', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers
@@ -68,7 +68,7 @@ app.get('/openapi/interactive/listVhResourceWithStatus', async (req, res) => {
   console.log('Headers:', req.headers);
   
   try {
-    const response = await axios.get('https://10.46.7.1/openapi/interactive/listVhResourceWithStatus', {
+    const response = await axios.get('https://37.64.205.84/openapi/interactive/listVhResourceWithStatus', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         'signature': req.headers.signature || req.headers['signature'],
@@ -102,7 +102,7 @@ app.all(/^\/openapi\/(.*)/, async (req, res) => {
   try {
     const response = await axios({
       method: req.method,
-      url: `https://10.46.7.1${path}`,
+      url: `https://37.64.205.84${path}`,
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers,
