@@ -45,10 +45,40 @@
     playsinline
     :style="{ transform: 'scaleX(-1)' }"
     style="width: 100%; height: 100%; object-fit: cover"
-    @loadedmetadata="() => console.log('[VIDEO] Metadata chargées')"
+    @loadedmetadata="handleRemoteVideoLoaded"
     @playing="() => console.log('[VIDEO] En lecture')"
-    @canplay="() => console.log('[VIDEO] Peut jouer')"
+    @canplay="handleRemoteVideoCanPlay"
   ></video>
+  
+  <!-- Balise audio pour tester la réception audio distante -->
+  <audio
+    v-if="remoteStream"
+    ref="remoteAudio"
+    autoplay
+    :volume="0.8"
+    style="display: none;"
+  ></audio>
+  
+  <!-- Bouton pour forcer la lecture si autoplay bloqué -->
+  <button
+    v-if="showPlayButton"
+    @click="forcePlayRemoteVideo"
+    class="play-video-button"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white">
+      <path d="M8 5v14l11-7z"/>
+    </svg>
+    <span>Activer l'audio</span>
+  </button>
+  
+  <!-- Bouton de test audio (temporaire pour debug) -->
+  <button
+    v-if="remoteStream"
+    @click="testAudioManually"
+    class="test-audio-button"
+  >
+    🔊 Test Audio
+  </button>
   
   <!-- Avatar SDK UNIQUEMENT pour le client -->
   <div v-if="userRole === 'client' && remoteStream" class="agent-avatar-container"></div>
@@ -73,10 +103,19 @@
         v-if="localStream"
         ref="localVideo"
         autoplay
-        
+        muted
         :class="{ hidden: !isVideoCall }"
         :style="{ transform: 'scaleX(-1)' }"
       ></video>
+      
+      <!-- Balise audio pour tester l'audio local (muted pour éviter l'écho) -->
+      <audio
+        v-if="localStream"
+        ref="localAudio"
+        autoplay
+        muted
+        style="display: none;"
+      ></audio>
       
       <div class="local-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
@@ -307,9 +346,11 @@ const emit = defineEmits([
 // notification(s)
 const toast = useToast();
 
-// Références pour les éléments vidéos
+// Références pour les éléments vidéos et audio
 const localVideo = ref(null);
 const remoteVideo = ref(null);
+const localAudio = ref(null);
+const remoteAudio = ref(null);
 const isRecording = ref(false);
 
 // Variables d'état
@@ -462,31 +503,113 @@ const startOutgoingCall = async () => {
 
 const showPlayButton = ref(false);
 
-// Ajoutez cette méthode pour forcer la lecture
-const forcePlayRemoteVideo = () => {
-  const remoteVideo = document.getElementById("remoteVideo");
-  if (remoteVideo && remoteStream.value) {
-
-    // Réinitialiser le srcObject pour éviter les problèmes
-    const currentStream = remoteVideo.srcObject;
-    remoteVideo.srcObject = null;
-
-    // Petit délai avant de réattacher le flux
-    setTimeout(() => {
-      remoteVideo.srcObject = currentStream;
-      remoteVideo.volume = 1.0;
-      remoteVideo.muted = false;
-
-      remoteVideo
-        .play()
-        .then(() => {
-          showPlayButton.value = false;
-        })
-        .catch((error) => {
-          console.error("Échec de la lecture forcée:", error);
-        });
-    }, 100);
+// Ajoutez cette méthode pour forcer la lecture avec interaction
+const forcePlayRemoteVideo = async () => {
+  const remoteVideoEl = remoteVideo.value || document.getElementById("remoteVideo");
+  const remoteAudioEl = remoteAudio.value;
+  
+  if (!remoteVideoEl || !remoteStream.value) {
+    console.error('[FORCE PLAY] Élément vidéo ou flux manquant');
+    return;
   }
+
+  try {
+    console.log('[FORCE PLAY] Démarrage forcé...');
+    
+    // 1. Forcer l'audio sur l'élément vidéo
+    remoteVideoEl.muted = false;
+    remoteVideoEl.volume = 1.0;
+    
+    // 2. Forcer l'audio sur l'élément audio aussi
+    if (remoteAudioEl) {
+      remoteAudioEl.muted = false;
+      remoteAudioEl.volume = 1.0;
+    }
+    
+    // 3. Forcer l'activation des tracks audio
+    const audioTracks = remoteStream.value.getAudioTracks();
+    audioTracks.forEach(track => {
+      track.enabled = true;
+      console.log('[FORCE PLAY] Track audio activé:', track.id);
+    });
+    
+    // 4. Réattacher le flux
+    remoteVideoEl.srcObject = null;
+    if (remoteAudioEl) remoteAudioEl.srcObject = null;
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    remoteVideoEl.srcObject = remoteStream.value;
+    if (remoteAudioEl) remoteAudioEl.srcObject = remoteStream.value;
+    
+    // 5. Forcer la lecture des deux éléments
+    await remoteVideoEl.play();
+    if (remoteAudioEl) {
+      await remoteAudioEl.play();
+      console.log('[FORCE PLAY] ✅ Audio element aussi en lecture');
+    }
+    
+    console.log('[FORCE PLAY] ✅ Lecture forcée réussie');
+    showPlayButton.value = false;
+    
+    // 6. Test audio après activation
+    setTimeout(() => {
+      testAudioPlayback(remoteStream.value);
+    }, 1000);
+    
+  } catch (error) {
+    console.error('[FORCE PLAY] Échec:', error);
+  }
+};
+
+// Test audio manuel
+const testAudioManually = () => {
+  console.log('[MANUAL TEST] 🔊 Test audio manuel démarré');
+  
+  // TESTER LE FLUX LOCAL (notre micro)
+  if (localStream.value) {
+    console.log('[MANUAL TEST] 🎤 Test flux LOCAL (notre micro)...');
+    testAudioPlayback(localStream.value, 'LOCAL');
+  } else {
+    console.log('[MANUAL TEST] ❌ Pas de flux local');
+  }
+  
+  // TESTER LE FLUX DISTANT (micro de l'autre)
+  if (!remoteStream.value) {
+    console.log('[MANUAL TEST] ❌ Pas de flux distant');
+    return;
+  }
+  
+  console.log('[MANUAL TEST] 📡 Test flux DISTANT (micro de l\'autre)...');
+  
+  // Tester avec la balise audio
+  if (remoteAudio.value) {
+    console.log('[MANUAL TEST] Test avec balise audio...');
+    remoteAudio.value.volume = 1.0;
+    remoteAudio.value.muted = false;
+    
+    remoteAudio.value.play().then(() => {
+      console.log('[MANUAL TEST] ✅ Balise audio en lecture');
+    }).catch(error => {
+      console.log('[MANUAL TEST] ❌ Erreur balise audio:', error);
+    });
+  }
+  
+  // Tester avec la balise vidéo
+  if (remoteVideo.value) {
+    console.log('[MANUAL TEST] Test avec balise vidéo...');
+    remoteVideo.value.volume = 1.0;
+    remoteVideo.value.muted = false;
+    
+    console.log('[MANUAL TEST] État vidéo:', {
+      paused: remoteVideo.value.paused,
+      muted: remoteVideo.value.muted,
+      volume: remoteVideo.value.volume
+    });
+  }
+  
+  // Test avec AudioContext
+  testAudioPlayback(remoteStream.value, 'DISTANT');
 };
 
 /**
@@ -1116,52 +1239,229 @@ onUnmounted(() => {
   VirtualAvatarService.destroy();
 });
 
-/**
- *  surveille les changements des éléments vidéo et des flux associés.
- * Si un flux est disponible, il est attaché à l'élément vidéo correspondant.
- */
-watch([localVideo, remoteVideo, localStream, remoteStream], () => {
-  if (localVideo.value && localStream.value) {
-    localVideo.value.srcObject = localStream.value;
-    console.log('[WATCHER] Flux local attaché');
+// Handlers pour forcer l'audio
+const handleRemoteVideoLoaded = () => {
+  console.log('[VIDEO] Metadata chargées');
+  forceEnableAudio();
+};
+
+const handleRemoteVideoCanPlay = () => {
+  console.log('[VIDEO] Peut jouer');
+  forceEnableAudio();
+};
+
+const forceEnableAudio = () => {
+  if (!remoteVideo.value) return;
+  
+  // CRITIQUE : Forcer l'audio à être activé
+  remoteVideo.value.muted = false;
+  remoteVideo.value.volume = 1.0;
+  
+  // Vérifier les tracks audio
+  const stream = remoteVideo.value.srcObject;
+  if (stream) {
+    const audioTracks = stream.getAudioTracks();
+    audioTracks.forEach(track => {
+      if (!track.enabled) {
+        track.enabled = true;
+        console.log('[AUDIO] ✅ Track audio activé:', track.id);
+      }
+    });
+    
+    console.log('[AUDIO] État:', {
+      muted: remoteVideo.value.muted,
+      volume: remoteVideo.value.volume,
+      audioTracks: audioTracks.length,
+      allEnabled: audioTracks.every(t => t.enabled)
+    });
+    
+    // TEST AUDIO : Vérifier si l'audio fonctionne vraiment
+    testAudioPlayback(stream);
+  }
+};
+
+// Fonction pour tester l'audio
+const testAudioPlayback = (stream, source = 'UNKNOWN') => {
+  const audioTracks = stream.getAudioTracks();
+  if (audioTracks.length === 0) {
+    console.log(`[AUDIO TEST ${source}] ❌ Aucune piste audio dans le flux`);
+    return;
   }
   
+  const audioTrack = audioTracks[0];
+  console.log(`[AUDIO TEST ${source}] 🔊 Test piste audio:`, {
+    id: audioTrack.id,
+    label: audioTrack.label,
+    enabled: audioTrack.enabled,
+    readyState: audioTrack.readyState,
+    muted: audioTrack.muted
+  });
+  
+  // Créer un AudioContext pour analyser l'audio
+  if (window.AudioContext || window.webkitAudioContext) {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      
+      source.connect(analyser);
+      analyser.fftSize = 256;
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let maxLevel = 0;
+      let checksCount = 0;
+      
+      const checkAudio = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        maxLevel = Math.max(maxLevel, average);
+        checksCount++;
+        
+        if (average > 0) {
+          console.log(`[AUDIO TEST ${source}] 🎵 Signal audio détecté, niveau:`, average);
+        }
+      };
+      
+      // Vérifier pendant 3 secondes
+      const interval = setInterval(checkAudio, 200);
+      setTimeout(() => {
+        clearInterval(interval);
+        
+        if (maxLevel === 0) {
+          console.log(`[AUDIO TEST ${source}] 🔇 Aucun signal audio détecté après ${checksCount} vérifications`);
+        } else {
+          console.log(`[AUDIO TEST ${source}] ✅ Signal détecté ! Niveau max:`, maxLevel);
+        }
+        
+        audioContext.close();
+      }, 3000);
+      
+    } catch (error) {
+      console.log(`[AUDIO TEST ${source}] ❌ Erreur AudioContext:`, error);
+    }
+  }
+};
+
+/**
+ *  surveille les changements des éléments vidéo/audio et des flux associés.
+ * Si un flux est disponible, il est attaché aux éléments correspondants.
+ */
+watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStream], () => {
+  // Attacher le flux local à la vidéo ET à l'audio
+  if (localVideo.value && localStream.value) {
+    if (localVideo.value.srcObject !== localStream.value) {
+      localVideo.value.srcObject = localStream.value;
+      console.log('[WATCHER] Flux local attaché à la vidéo');
+    }
+  }
+  
+  if (localAudio.value && localStream.value) {
+    if (localAudio.value.srcObject !== localStream.value) {
+      localAudio.value.srcObject = localStream.value;
+      console.log('[WATCHER] Flux local attaché à l\'audio (test)');
+    }
+  }
+  
+  // Attacher le flux distant à la vidéo ET à l'audio
   if (remoteVideo.value && remoteStream.value) {
     // Vérifier si le flux a changé
     if (remoteVideo.value.srcObject === remoteStream.value) {
-      console.log('[WATCHER] Flux distant déjà attaché, ignoré');
+      console.log('[WATCHER] Flux distant déjà attaché, vérification audio...');
+      forceEnableAudio();
       return;
     }
     
     console.log('[WATCHER] Attachement flux distant, tracks:', remoteStream.value.getTracks().length);
-    console.log('[WATCHER] remoteVideo element:', remoteVideo.value);
-    console.log('[WATCHER] remoteVideo visible:', remoteVideo.value.offsetWidth, 'x', remoteVideo.value.offsetHeight);
     
     remoteStream.value.getTracks().forEach(track => {
       console.log('[WATCHER] Track:', track.kind, 'enabled:', track.enabled, 'readyState:', track.readyState);
     });
     
+    // Attacher le flux à la vidéo
     remoteVideo.value.srcObject = remoteStream.value;
-    console.log('[WATCHER] srcObject défini, tentative de lecture...');
-    console.log('[WATCHER] srcObject défini, tentative de lecture...', remoteVideo.value);
     
+    // CRITIQUE : Forcer immédiatement l'audio AVANT play()
+    remoteVideo.value.muted = false;
+    remoteVideo.value.volume = 1.0;
+    
+    console.log('[WATCHER] srcObject défini, tentative de lecture...');
+    
+    // Tenter la lecture
     remoteVideo.value.play().then(() => {
       console.log('[WATCHER] ✅ Vidéo distante en lecture');
-      console.log('[WATCHER] Video paused:', remoteVideo.value.paused, 'currentTime:', remoteVideo.value.currentTime);
-      console.log('[WATCHER] Video readyState:', remoteVideo.value.readyState, 'networkState:', remoteVideo.value.networkState);
-      console.log('[WATCHER] Video videoWidth:', remoteVideo.value.videoWidth, 'videoHeight:', remoteVideo.value.videoHeight);
+      
+      // Forcer l'audio après le démarrage
+      forceEnableAudio();
+      
+      // Double vérification après 1 seconde
       setTimeout(() => {
-        remoteVideo.value.muted = false;
-        remoteVideo.value.volume = 1.0;
-        console.log('[WATCHER] ✅ Audio activé');
-      }, 500);
+        forceEnableAudio();
+        
+        // Vérification finale
+        const audioTracks = remoteStream.value.getAudioTracks();
+        console.log('[WATCHER] ✅ Vérification finale audio:', {
+          muted: remoteVideo.value.muted,
+          volume: remoteVideo.value.volume,
+          tracksCount: audioTracks.length,
+          tracksEnabled: audioTracks.map(t => ({ id: t.id, enabled: t.enabled, readyState: t.readyState }))
+        });
+      }, 1000);
     }).catch(error => {
       console.error('[WATCHER] ❌ Erreur autoplay:', error.name, error.message);
+      
+      // Si l'autoplay échoue, essayer de forcer quand même l'audio
+      if (error.name === 'NotAllowedError') {
+        console.log('[WATCHER] ⚠️ Autoplay bloqué, audio sera activé dès interaction utilisateur');
+        showPlayButton.value = true;
+      }
     });
-  } else {
+  }
+  
+  // Attacher aussi le flux distant à la balise audio pour test
+  if (remoteAudio.value && remoteStream.value) {
+    if (remoteAudio.value.srcObject !== remoteStream.value) {
+      remoteAudio.value.srcObject = remoteStream.value;
+      remoteAudio.value.volume = 1.0; // Volume max pour test
+      remoteAudio.value.muted = false; // S'assurer que ce n'est pas muted
+      console.log('[WATCHER] ✅ Flux distant attaché à l\'audio de test');
+      
+      // Tester la lecture audio avec interaction utilisateur si nécessaire
+      const playAudio = async () => {
+        try {
+          await remoteAudio.value.play();
+          console.log('[AUDIO TEST] ✅ Audio distant en lecture');
+          
+          // TEST IMMÉDIAT : Vérifier le signal audio
+          testAudioPlayback(remoteStream.value);
+          
+          // Vérifier après 1 seconde si l'audio joue vraiment
+          setTimeout(() => {
+            console.log('[AUDIO TEST] État final:', {
+              paused: remoteAudio.value.paused,
+              volume: remoteAudio.value.volume,
+              muted: remoteAudio.value.muted,
+              currentTime: remoteAudio.value.currentTime
+            });
+          }, 1000);
+          
+        } catch (error) {
+          console.log('[AUDIO TEST] ⚠️ Erreur lecture audio:', error.name);
+          if (error.name === 'NotAllowedError') {
+            console.log('[AUDIO TEST] 🔊 Interaction utilisateur requise pour l\'audio');
+            // Afficher un bouton pour activer l'audio
+            showPlayButton.value = true;
+          }
+        }
+      };
+      
+      playAudio();
+    }
+  }
+  
+  if (!remoteVideo.value || !remoteStream.value) {
     console.log('[WATCHER] Manquant - remoteVideo:', !!remoteVideo.value, 'remoteStream:', !!remoteStream.value);
   }
-}, { flush: 'post' }); // IMPORTANT : flush post pour éviter les multiples déclenchements
+}, { flush: 'post' });
 
 const isScreenSharer = ref(false);
 
@@ -1184,17 +1484,22 @@ const initPeerJS = async () => {
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
             {
-              urls: "turn:numb.viagenie.ca",
-              username: "webrtc@live.com",
-              credential: "muazkh",
-            },
-            {
               urls: "turn:openrelay.metered.ca:80",
               username: "openrelayproject",
               credential: "openrelayproject",
             },
+            {
+              urls: "turn:openrelay.metered.ca:443",
+              username: "openrelayproject",
+              credential: "openrelayproject",
+            },
+            {
+              urls: "turn:37.64.205.85:3478",
+              username: "webrtc",
+              credential: "VippInterstis@123",
+            }
           ],
-        },
+        }
       });
 
       peerConnection.value.on("open", () => {
@@ -1549,6 +1854,24 @@ const toggleVideo = () => {
 </script>
 
 <style scoped>
+.test-audio-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 10px 15px;
+  cursor: pointer;
+  z-index: 20;
+  font-size: 14px;
+}
+
+.test-audio-button:hover {
+  background-color: #45a049;
+}
+
 .play-video-button {
   position: absolute;
   top: 50%;

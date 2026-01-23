@@ -228,17 +228,13 @@ const initializeConnection = (userId) => {
   currentUserId.value = userId;
 
   // Initialiser la connexion socket
-  socket.value = io("http://37.64.205.85:8000", {
+socket.value = io("https://webcall.vippinterstis.com:8000", {
     path: "/backend/socket.io",
-    transports: ["polling", "websocket"],
-    reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionAttempts: 10
-  });
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  secure: true
+});
 
-  socket.value.on("connect_error", (error) => {
-    console.error("❌ Erreur connexion Socket.IO:", error.message);
-  });
 
   socket.value.on("connect", () => {
     console.log("Socket connected:", socket.value.id);

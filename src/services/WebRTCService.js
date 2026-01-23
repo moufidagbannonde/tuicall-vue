@@ -110,6 +110,13 @@ class WebRTCService {
 
     this.peerConnection.ontrack = (event) => {
       console.log('[TRACK] Reçu track:', event.track.kind, 'streams:', event.streams.length);
+      
+      // CRITIQUE : Forcer l'activation des tracks audio
+      if (event.track.kind === 'audio') {
+        event.track.enabled = true;
+        console.log('[TRACK] ✅ Track audio forcé à enabled:', event.track.id);
+      }
+      
       this.remoteStream = event.streams[0];
       this.debugRemoteStream(this.remoteStream);
 
@@ -229,6 +236,12 @@ class WebRTCService {
 
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
       this.isVideoEnabled = withVideo;
+      
+      // CRITIQUE : S'assurer que les tracks audio sont activés
+      this.localStream.getAudioTracks().forEach(track => {
+        track.enabled = true;
+        console.log('[LOCAL MEDIA] ✅ Track audio local activé:', track.id);
+      });
 
       if (this.peerConnection && this.localStream) {
         this.localStream.getTracks().forEach((track) => {
@@ -246,6 +259,12 @@ class WebRTCService {
           this.localStream = await navigator.mediaDevices.getUserMedia({
             audio: true,
             video: false,
+          });
+          
+          // CRITIQUE : S'assurer que les tracks audio sont activés
+          this.localStream.getAudioTracks().forEach(track => {
+            track.enabled = true;
+            console.log('[LOCAL MEDIA] ✅ Track audio local activé (fallback):', track.id);
           });
 
           if (this.peerConnection && this.localStream) {
@@ -472,6 +491,16 @@ class WebRTCService {
       if (data.to === this.currentUserId && this.peerConnection) {
         try {
           console.log('[ICE] 🔄 Reçu réponse de redémarrage ICE');
+          
+          // IMPORTANT: Vérifier l'état avant de définir la remote description
+          const state = this.peerConnection.signalingState;
+          console.log('[ICE] État signaling:', state);
+          
+          if (state === 'stable') {
+            console.log('[ICE] ⚠️ Connexion déjà stable, redémarrage ICE ignoré');
+            this.isNegotiating = false;
+            return;
+          }
           
           // IMPORTANT: Vider les candidats en attente
           this.pendingCandidates = [];

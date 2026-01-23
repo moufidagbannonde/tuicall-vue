@@ -218,12 +218,16 @@ const handleRemoteStream = (stream) => {
   console.log('[UI] Flux distant reçu');
   remoteStream.value = stream;
   
-  if (remoteVideo.value) {
-    remoteVideo.value.srcObject = stream;
-    remoteVideo.value.play().catch(err => {
-      console.warn('[UI] Autoplay bloqué:', err);
-    });
-  }
+  nextTick(() => {
+    if (remoteVideo.value) {
+      remoteVideo.value.srcObject = stream;
+      remoteVideo.value.muted = false;
+      remoteVideo.value.volume = 1.0;
+      remoteVideo.value.play().catch(err => {
+        console.warn('[UI] Autoplay bloqué:', err);
+      });
+    }
+  });
 };
 
 // Gestion changement de statut
@@ -266,6 +270,12 @@ const startOutgoingCall = async () => {
     }
     
     localStream.value = result.stream;
+    
+    if (localVideo.value) {
+      localVideo.value.srcObject = localStream.value;
+      localVideo.value.muted = true;
+    }
+    
     currentCallStatus.value = 'outgoing';
     
     await WebRTCService.makeCall(props.remoteUserId, props.isVideoCall && !result.fallbackToAudio);
@@ -286,10 +296,13 @@ const acceptCall = async () => {
     }
     
     localStream.value = result.stream;
-    await WebRTCService.acceptCall();
     
-    currentCallStatus.value = 'connected';
-    emit('call-status-change', 'connected', props.remoteUserId, props.isVideoCall);
+    if (localVideo.value) {
+      localVideo.value.srcObject = localStream.value;
+      localVideo.value.muted = true;
+    }
+    
+    await WebRTCService.acceptCall();
     
   } catch (error) {
     console.error('[UI] Erreur acceptation appel:', error);
