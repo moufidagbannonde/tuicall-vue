@@ -316,7 +316,11 @@ class VirtualAvatarService {
         }
       }
 
-      const rawHumanInfo = humanInfoData.data[0];
+      // Sélectionner un avatar aléatoire
+      const randomIndex = Math.floor(Math.random() * humanInfoData.data.length);
+      const rawHumanInfo = humanInfoData.data[randomIndex];
+      console.log(`[AVATAR] Avatar sélectionné: ${randomIndex + 1}/${humanInfoData.data.length} - ${rawHumanInfo.name}`);
+      
       const humanInfo = {
         id: rawHumanInfo.id,
         name: rawHumanInfo.name,

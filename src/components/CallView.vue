@@ -43,10 +43,9 @@
     ref="remoteVideo"
     autoplay
     playsinline
-    :style="{ transform: 'scaleX(-1)' }"
-    style="width: 100%; height: 100%; object-fit: cover"
+    :class="{ 'screen-sharing': screenSharingActive }"
     @loadedmetadata="handleRemoteVideoLoaded"
-    @playing="() => console.log('[VIDEO] En lecture')"
+    @playing="() => console.log('[VIDEO] En lecture, screenSharing:', screenSharingActive)"
     @canplay="handleRemoteVideoCanPlay"
   ></video>
   
@@ -69,15 +68,6 @@
       <path d="M8 5v14l11-7z"/>
     </svg>
     <span>Activer l'audio</span>
-  </button>
-  
-  <!-- Bouton de test audio (temporaire pour debug) -->
-  <button
-    v-if="remoteStream"
-    @click="testAudioManually"
-    class="test-audio-button"
-  >
-    🔊 Test Audio
   </button>
   
   <!-- Avatar SDK UNIQUEMENT pour le client -->
@@ -562,56 +552,6 @@ const forcePlayRemoteVideo = async () => {
   }
 };
 
-// Test audio manuel
-const testAudioManually = () => {
-  console.log('[MANUAL TEST] 🔊 Test audio manuel démarré');
-  
-  // TESTER LE FLUX LOCAL (notre micro)
-  if (localStream.value) {
-    console.log('[MANUAL TEST] 🎤 Test flux LOCAL (notre micro)...');
-    testAudioPlayback(localStream.value, 'LOCAL');
-  } else {
-    console.log('[MANUAL TEST] ❌ Pas de flux local');
-  }
-  
-  // TESTER LE FLUX DISTANT (micro de l'autre)
-  if (!remoteStream.value) {
-    console.log('[MANUAL TEST] ❌ Pas de flux distant');
-    return;
-  }
-  
-  console.log('[MANUAL TEST] 📡 Test flux DISTANT (micro de l\'autre)...');
-  
-  // Tester avec la balise audio
-  if (remoteAudio.value) {
-    console.log('[MANUAL TEST] Test avec balise audio...');
-    remoteAudio.value.volume = 1.0;
-    remoteAudio.value.muted = false;
-    
-    remoteAudio.value.play().then(() => {
-      console.log('[MANUAL TEST] ✅ Balise audio en lecture');
-    }).catch(error => {
-      console.log('[MANUAL TEST] ❌ Erreur balise audio:', error);
-    });
-  }
-  
-  // Tester avec la balise vidéo
-  if (remoteVideo.value) {
-    console.log('[MANUAL TEST] Test avec balise vidéo...');
-    remoteVideo.value.volume = 1.0;
-    remoteVideo.value.muted = false;
-    
-    console.log('[MANUAL TEST] État vidéo:', {
-      paused: remoteVideo.value.paused,
-      muted: remoteVideo.value.muted,
-      volume: remoteVideo.value.volume
-    });
-  }
-  
-  // Test avec AudioContext
-  testAudioPlayback(remoteStream.value, 'DISTANT');
-};
-
 /**
  *  gère le flux vidéo/audio distant reçu.
  *  met à jour le flux distant et l'affiche si un élément vidéo est présent.
@@ -874,16 +814,16 @@ onMounted(async () => {
     );
   }
 
-  // Écouter l'événement screen-share-started
   props.socket.on("screen-share-started", (data) => {
     if (data.from === props.remoteUserId) {
+      screenSharingActive.value = true;
       toast.info(`${props.remoteUserId} a commencé à partager son écran`);
     }
   });
 
-  // Écouter l'événement screen-share-stopped
   props.socket.on("screen-share-stopped", (data) => {
     if (data.from === props.remoteUserId) {
+      screenSharingActive.value = false;
       toast.info(`${props.remoteUserId} a arrêté de partager son écran`);
     }
   });
@@ -1465,6 +1405,36 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
 
 const isScreenSharer = ref(false);
 
+// Variables pour stocker les IDs PeerJS
+const remotePeerId = ref(null);
+const localPeerId = ref(null);
+
+props.socket.on('peerjs-id', (data) => {
+  if (data.userId === props.remoteUserId) {
+    remotePeerId.value = data.peerId;
+  }
+});
+
+props.socket.on('request-peer-id', () => {
+  if (localPeerId.value) {
+    props.socket.emit('peerjs-id', {
+      peerId: localPeerId.value,
+      userId: props.currentUserId,
+      to: props.remoteUserId
+    });
+  }
+});
+
+// Debug: Afficher l'état des IDs PeerJS
+watch([remotePeerId, localPeerId], ([remote, local]) => {
+  console.log('[PEERJS DEBUG] État des IDs:', {
+    local: local,
+    remote: remote,
+    remoteUserId: props.remoteUserId,
+    currentUserId: props.currentUserId
+  });
+});
+
 const initPeerJS = async () => {
   try {
     // Détruire l'ancienne connexion si elle existe
@@ -1502,7 +1472,23 @@ const initPeerJS = async () => {
         }
       });
 
-      peerConnection.value.on("open", () => {
+      peerConnection.value.on("open", (id) => {
+        console.log('[PEERJS] Connexion ouverte avec ID:', id);
+        localPeerId.value = id; // Stocker notre ID local
+        
+        // Émettre notre ID PeerJS via socket
+        console.log('[PEERJS] Émission de notre ID vers:', props.remoteUserId);
+        console.log('[PEERJS] Données émises:', {
+          peerId: id,
+          userId: props.currentUserId,
+          to: props.remoteUserId
+        });
+        
+        props.socket.emit('peerjs-id', {
+          peerId: id,
+          userId: props.currentUserId,
+          to: props.remoteUserId
+        });
         resolve();
       });
       peerConnection.value.on("call", (call) => {
@@ -1583,45 +1569,32 @@ const initPeerJS = async () => {
 
 const startScreenShare = async () => {
   try {
-    if (!peerConnection.value) {
-      console.error("PeerJS not initialized");
-      toast.error("Erreur d'initialisation pour le partage d'écran");
-      await initPeerJS();
-    }
-
-    // Get screen sharing stream
     const screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
+      video: { cursor: "always" },
       audio: false,
     });
-    // Afficher le flux de partage d'écran dans le nouvel élément vidéo
-    if (screenShareVideo.value) {
-      screenShareVideo.value.srcObject = screenStream;
+
+    // Utiliser WebRTC existant au lieu de PeerJS
+    if (WebRTCService.peerConnection) {
+      const sender = WebRTCService.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) {
+        await sender.replaceTrack(screenStream.getVideoTracks()[0]);
+        isScreenSharer.value = true;
+        screenSharingActive.value = true;
+      }
     }
 
-    // Connect to remote peer if not already connected
-    if (!remotePeerConnection.value) {
-      remotePeerConnection.value = peerConnection.value.connect(
-        props.remoteUserId
-      );
-
-      // Wait for connection to open
-      remotePeerConnection.value.on("open", () => {
-        sendScreenStream(screenStream);
-      });
-    } else {
-      sendScreenStream(screenStream);
-    }
-
-    // Handle stream ending
-    screenStream.getVideoTracks()[0].onended = () => {
+    screenStream.getVideoTracks()[0].onended = async () => {
+      if (localStream.value && WebRTCService.peerConnection) {
+        const videoTrack = localStream.value.getVideoTracks()[0];
+        const sender = WebRTCService.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+        if (sender && videoTrack) {
+          await sender.replaceTrack(videoTrack);
+        }
+      }
       stopScreenShare();
     };
 
-    isScreenSharer.value = true;
-    screenSharingActive.value = true;
-
-    // Notify via socket
     props.socket.emit("screen-share-started", {
       from: props.currentUserId,
       to: props.remoteUserId,
@@ -1629,94 +1602,32 @@ const startScreenShare = async () => {
 
     toast.success("Partage d'écran démarré");
   } catch (error) {
-    console.error("Erreur lors du partage d'écran:", error);
-    toast.error("Impossible de partager l'écran. Veuillez réessayer.");
+    toast.error("Impossible de partager l'écran");
   }
 };
 
-const screenShareCall = ref(null);
-
 const stopScreenShare = async () => {
   try {
-    // Arrêter le partage d'écran
-    if (screenShareVideo.value && screenShareVideo.value.srcObject) {
-      screenShareVideo.value.srcObject
-        .getTracks()
-        .forEach((track) => track.stop());
-      screenShareVideo.value.srcObject = null;
+    // Restaurer la caméra
+    if (localStream.value && WebRTCService.peerConnection) {
+      const videoTrack = localStream.value.getVideoTracks()[0];
+      const sender = WebRTCService.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+      if (sender && videoTrack) {
+        await sender.replaceTrack(videoTrack);
+      }
     }
 
-    // Fermer l'appel de partage d'écran
-    if (screenShareCall.value) {
-      screenShareCall.value.close();
-      screenShareCall.value = null;
-    }
     isScreenSharer.value = false;
     screenSharingActive.value = false;
 
-    await nextTick();
-
-    // Notify remote peer
-    if (remotePeerConnection.value && remotePeerConnection.value.open) {
-      remotePeerConnection.value.send({
-        type: "screen-share-stopped",
-        from: props.currentUserId,
-      });
-    }
-
-    // Notify via socket
     props.socket.emit("screen-share-stopped", {
       from: props.currentUserId,
       to: props.remoteUserId,
     });
-    screenSharingActive.value = false;
-    isScreenSharer.value = null;
+    
     toast.info("Partage d'écran arrêté");
   } catch (error) {
-    console.error("Erreur lors de l'arrêt du partage d'écran:", error);
     toast.error("Erreur lors de l'arrêt du partage d'écran");
-  }
-};
-
-const sendScreenStream = (screenStream) => {
-  try {
-    if (!props.remoteUserId) {
-      throw new Error("ID du pair distant non défini");
-    }
-
-    // Créer l'appel avec le flux d'écran
-    const call = peerConnection.value.call(props.remoteUserId, screenStream, {
-      metadata: { type: "screen-share" },
-      sdpTransform: (sdp) => {
-        // Forcer une meilleure qualité vidéo
-        return sdp.replace(
-          "useinbandfec=1",
-          "useinbandfec=1;stereo=1;maxaveragebitrate=510000"
-        );
-      },
-    });
-
-    call.on("error", (err) => {
-      console.error("Erreur lors de l'appel de partage d'écran:", err);
-      toast.error("Erreur lors du partage d'écran");
-    });
-
-    call.on("stream", (remoteStream) => {
-    });
-
-    // Sauvegarder l'appel pour pouvoir le fermer plus tard
-    screenShareCall.value = call;
-
-    // Notification via data connection
-    if (remotePeerConnection.value && remotePeerConnection.value.open) {
-      remotePeerConnection.value.send({
-        type: "screen-share-started",
-        from: props.currentUserId,
-      });
-    }
-  } catch (error) {
-    console.error("Erreur lors de l'envoi du flux de partage d'écran:", error);
-    toast.error("Erreur lors du partage d'écran");
   }
 };
 
@@ -1854,24 +1765,6 @@ const toggleVideo = () => {
 </script>
 
 <style scoped>
-.test-audio-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  padding: 10px 15px;
-  cursor: pointer;
-  z-index: 20;
-  font-size: 14px;
-}
-
-.test-audio-button:hover {
-  background-color: #45a049;
-}
-
 .play-video-button {
   position: absolute;
   top: 50%;
@@ -1947,6 +1840,12 @@ const toggleVideo = () => {
   height: 100% !important;
   object-fit: cover !important;
   display: block !important;
+  transform: scaleX(-1);
+}
+
+.remote-stream-container video.screen-sharing {
+  transform: none !important;
+  object-fit: contain !important;
 }
 
 .local-stream-container {
@@ -2128,18 +2027,20 @@ const toggleVideo = () => {
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  padding: 80px;
 }
 
 .agent-avatar-container canvas {
-  max-width: 50% !important;
-  max-height: 95% !important;
+  max-width: 600px !important;
+  max-height: 90% !important;
   width: auto !important;
-  height: 100% !important;
+  height: auto !important;
   object-fit: contain !important;
-  margin: auto;
-  border-radius: 24px;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.7);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .avatar-iframe {
