@@ -1,12 +1,9 @@
 <template>
   <div class="call-container" :class="{ 'video-call': isVideoCall }">
     <!-- Arrière-plan avec initiale pour l'appelant et l'appelé -->
-    <div
-      class="background-initial"
-      v-if="
-        !isVideoCall && (callStatus === 'outgoing' || callStatus === 'incoming')
-      "
-    >
+    <div class="background-initial" v-if="
+      !isVideoCall && (callStatus === 'outgoing' || callStatus === 'incoming')
+    ">
       <span class="large-initial">
         {{
           callStatus === "outgoing"
@@ -36,82 +33,43 @@
     </div>
     <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container relative">
-  <!-- Vidéo WebRTC pour tous les utilisateurs (appel vidéo basique) -->
-  <video
-    v-show="remoteStream"
-    id="remoteVideo"
-    ref="remoteVideo"
-    autoplay
-    playsinline
-    :class="{ 'screen-sharing': screenSharingActive }"
-    @loadedmetadata="handleRemoteVideoLoaded"
-    @playing="() => console.log('[VIDEO] En lecture, screenSharing:', screenSharingActive)"
-    @canplay="handleRemoteVideoCanPlay"
-  ></video>
-  
-  <!-- Balise audio pour tester la réception audio distante -->
-  <audio
-    v-if="remoteStream"
-    ref="remoteAudio"
-    autoplay
-    :volume="0.8"
-    style="display: none;"
-  ></audio>
-  
-  <!-- Bouton pour forcer la lecture si autoplay bloqué -->
-  <button
-    v-if="showPlayButton"
-    @click="forcePlayRemoteVideo"
-    class="play-video-button"
-  >
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white">
-      <path d="M8 5v14l11-7z"/>
-    </svg>
-    <span>Activer l'audio</span>
-  </button>
-  
-  <!-- Avatar SDK UNIQUEMENT pour le client -->
-  <div v-if="userRole === 'client' && remoteStream" class="agent-avatar-container"></div>
-</div>
+      <!-- Vidéo WebRTC pour tous les utilisateurs (appel vidéo basique) -->
+      <video v-show="remoteStream" id="remoteVideo" ref="remoteVideo" autoplay playsinline
+        :class="{ 'screen-sharing': screenSharingActive }" @loadedmetadata="handleRemoteVideoLoaded"
+        @playing="() => console.log('[VIDEO] En lecture, screenSharing:', screenSharingActive)"
+        @canplay="handleRemoteVideoCanPlay"></video>
+
+      <!-- Balise audio pour tester la réception audio distante -->
+      <audio v-if="remoteStream" ref="remoteAudio" autoplay :volume="0.8" style="display: none;"></audio>
+
+      <!-- Bouton pour forcer la lecture si autoplay bloqué -->
+      <button v-if="showPlayButton" @click="forcePlayRemoteVideo" class="play-video-button">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="white">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span>Activer l'audio</span>
+      </button>
+
+      <!-- Avatar SDK UNIQUEMENT pour le client -->
+      <div v-if="userRole === 'client' && remoteStream" class="agent-avatar-container"></div>
+    </div>
 
     <!-- flux de partage d'écran -->
-    <video
-      v-if="screenSharingActive && !isScreenSharer"
-      ref="screenShareVideo"
-      :key="'screen-' + Date.now()"
-      autoplay
-      playsinline
-      class="screen-share-video"
-    ></video>
+    <video v-if="screenSharingActive && !isScreenSharer" ref="screenShareVideo" :key="'screen-' + Date.now()" autoplay
+      playsinline class="screen-share-video" :style="{ transform: 'none' }"></video>
     <!-- Affichage du flux de la vidéo localement -->
-    <div
-      class="local-stream-container"
-      v-if="currentCallStatus === 'connected' || localStream"
-    >
+    <div class="local-stream-container" v-if="currentCallStatus === 'connected' || localStream">
       <!-- Vidéo locale -->
-      <video
-        v-if="localStream"
-        ref="localVideo"
-        autoplay
-        muted
-        :class="{ hidden: !isVideoCall }"
-        :style="{ transform: 'scaleX(-1)' }"
-      ></video>
-      
+      <video v-if="localStream" ref="localVideo" autoplay muted :class="{ hidden: !isVideoCall }"
+        :style="{ transform: 'scaleX(-1)' }"></video>
+
       <!-- Balise audio pour tester l'audio local (muted pour éviter l'écho) -->
-      <audio
-        v-if="localStream"
-        ref="localAudio"
-        autoplay
-        muted
-        style="display: none;"
-      ></audio>
-      
+      <audio v-if="localStream" ref="localAudio" autoplay muted style="display: none;"></audio>
+
       <div class="local-audio-indicator" v-if="!isVideoCall">
         <div class="user-avatar">
           <span
-            class="text-xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-16 h-16 flex items-center justify-center"
-          >
+            class="text-xl font-bold text-indigo-600 dark:text-indigo-300 bg-white dark:bg-gray-800 rounded-full w-16 h-16 flex items-center justify-center">
             {{ currentUserId.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -119,18 +77,12 @@
     </div>
 
     <div class="remote-media-indicators space-y-3 fixed top-5 right-5 z-50">
-      <transition
-        enter-active-class="transform ease-out duration-300 transition"
-        enter-from-class="translate-y-[-20px] opacity-0"
-        enter-to-class="translate-y-0 opacity-100"
-        leave-active-class="transform ease-in duration-200 transition"
-        leave-from-class="translate-y-0 opacity-100"
-        leave-to-class="translate-y-[-20px] opacity-0"
-      >
-        <div
-          v-if="!remoteVideoEnabled"
-          class="video-disabled-indicator flex items-center bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-red-400"
-        >
+      <transition enter-active-class="transform ease-out duration-300 transition"
+        enter-from-class="translate-y-[-20px] opacity-0" enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transform ease-in duration-200 transition" leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-[-20px] opacity-0">
+        <div v-if="!remoteVideoEnabled"
+          class="video-disabled-indicator flex items-center bg-gradient-to-r from-red-500 to-red-600 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-red-400">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-red-700 rounded-full">
               <span class="text-xl">🎥</span>
@@ -145,18 +97,12 @@
         </div>
       </transition>
 
-      <transition
-        enter-active-class="transform ease-out duration-300 transition"
-        enter-from-class="translate-y-[-20px] opacity-0"
-        enter-to-class="translate-y-0 opacity-100"
-        leave-active-class="transform ease-in duration-200 transition"
-        leave-from-class="translate-y-0 opacity-100"
-        leave-to-class="translate-y-[-20px] opacity-0"
-      >
-        <div
-          v-if="!remoteAudioEnabled"
-          class="audio-disabled-indicator flex items-center bg-gradient-to-r from-gray-700 to-gray-800 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-gray-600"
-        >
+      <transition enter-active-class="transform ease-out duration-300 transition"
+        enter-from-class="translate-y-[-20px] opacity-0" enter-to-class="translate-y-0 opacity-100"
+        leave-active-class="transform ease-in duration-200 transition" leave-from-class="translate-y-0 opacity-100"
+        leave-to-class="translate-y-[-20px] opacity-0">
+        <div v-if="!remoteAudioEnabled"
+          class="audio-disabled-indicator flex items-center bg-gradient-to-r from-gray-700 to-gray-800 text-white px-5 py-3 rounded-lg shadow-xl backdrop-blur-sm border border-gray-600">
           <div class="flex items-center space-x-3">
             <div class="p-2 bg-gray-900 rounded-full">
               <span class="text-xl">🎤</span>
@@ -175,79 +121,38 @@
     <!-- Commandes d'appel -->
     <div class="call-controls">
       <!-- couper le son de l'appel -->
-      <button
-        @click="toggleMute"
-        class="control-btn"
-        :class="{ active: isMuted }"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            v-if="!isMuted"
-            d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z"
-          />
-          <path
-            v-if="!isMuted"
-            d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z"
-          />
-          <path
-            v-if="isMuted"
-            d="M10.5 1.875a1.125 1.125 0 012.25 0v8.25c0 .621-.504 1.125-1.125 1.125h-1.5a1.125 1.125 0 01-1.125-1.125v-8.25a1.125 1.125 0 011.125-1.125h1.5zm-4.5 4.5a.75.75 0 00-1.5 0v5.25c0 2.9 2.35 5.25 5.25 5.25h3a.75.75 0 000-1.5h-3a3.75 3.75 0 01-3.75-3.75V6.375z"
-          />
-          <path
-            v-if="isMuted"
-            d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z"
-          />
+      <button @click="toggleMute" class="control-btn" :class="{ active: isMuted }">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path v-if="!isMuted" d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
+          <path v-if="!isMuted"
+            d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
+          <path v-if="isMuted"
+            d="M10.5 1.875a1.125 1.125 0 012.25 0v8.25c0 .621-.504 1.125-1.125 1.125h-1.5a1.125 1.125 0 01-1.125-1.125v-8.25a1.125 1.125 0 011.125-1.125h1.5zm-4.5 4.5a.75.75 0 00-1.5 0v5.25c0 2.9 2.35 5.25 5.25 5.25h3a.75.75 0 000-1.5h-3a3.75 3.75 0 01-3.75-3.75V6.375z" />
+          <path v-if="isMuted" d="M19.78 17.28a.75.75 0 00-1.06-1.06L6.22 28.72a.75.75 0 101.06 1.06L19.78 17.28z" />
         </svg>
       </button>
       <!-- basculer entre l'affichage et le masquage de la vidéo -->
-      <button
-        @click="toggleVideo"
-        class="control-btn"
-        :class="{ active: isVideoOff }"
-        v-if="isVideoCall"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            v-if="!isVideoOff"
-            d="M4.5 4.5a3 3 0 00-3 3v9a3 3 0 003 3h8.25a3 3 0 003-3v-9a3 3 0 00-3-3H4.5zM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06z"
-          />
-          <path
-            v-if="isVideoOff"
-            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z"
-          />
+      <button @click="toggleVideo" class="control-btn" :class="{ active: isVideoOff }" v-if="isVideoCall">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path v-if="!isVideoOff"
+            d="M4.5 4.5a3 3 0 00-3 3v9a3 3 0 003 3h8.25a3 3 0 003-3v-9a3 3 0 00-3-3H4.5zM19.94 18.75l-2.69-2.69V7.94l2.69-2.69c.944-.945 2.56-.276 2.56 1.06v11.38c0 1.336-1.616 2.005-2.56 1.06z" />
+          <path v-if="isVideoOff"
+            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z" />
         </svg>
       </button>
       <!-- partager l'écran -->
-      <button
-        @click="startScreenShare"
-        class="control-btn"
-        v-if="currentCallStatus === 'connected' && userRole !== 'agent'"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
+      <button @click="startScreenShare" class="control-btn"
+        v-if="currentCallStatus === 'connected' && userRole !== 'agent'">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
           <path
-            d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm8 3l4 4h-3v4h-2v-4H8l4-4z"
-          />
+            d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm8 3l4 4h-3v4h-2v-4H8l4-4z" />
         </svg>
       </button>
       <!-- mettre fin à l'appel -->
       <button @click="endCall" class="control-btn end-call">
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
-          <path fill="currentColor" d="m3.68 16.07l3.92-3.11V9.59c2.85-.93 5.94-.93 8.8 0v3.38l3.91 3.1L24 12.39c-6.41-7.19-17.59-7.19-24 0z"/>
+          <path fill="currentColor"
+            d="m3.68 16.07l3.92-3.11V9.59c2.85-.93 5.94-.93 8.8 0v3.38l3.91 3.1L24 12.39c-6.41-7.19-17.59-7.19-24 0z" />
         </svg>
       </button>
     </div>
@@ -256,38 +161,21 @@
     <div class="incoming-call-controls" v-if="callStatus === 'incoming'">
       <!-- accepter l'appel -->
       <button @click="acceptCall()" class="accept-btn">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            fill-rule="evenodd"
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd"
-          />
+            clip-rule="evenodd" />
         </svg>
         Accepter
       </button>
       <!-- rejeter l'appel -->
       <button @click="rejectCall" class="reject-btn">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-6 h-6"
-        >
-          <path
-            fill-rule="evenodd"
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path fill-rule="evenodd"
             d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z"
-            clip-rule="evenodd"
-          />
-          <path
-            fill-rule="evenodd"
-            d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
-            clip-rule="evenodd"
-          />
+            clip-rule="evenodd" />
+          <path fill-rule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18z"
+            clip-rule="evenodd" />
         </svg>
         Rejeter
       </button>
@@ -391,14 +279,14 @@ const toggleRecording = () => {
     } else {
       toast.error("Erreur lors de l'arrêt de l'enregistrement.");
     }
-  // if (!isRecording.value) {
-  //   if (WebRTCService.startRecording()) {
-  //     isRecording.value = true;
-  //   }
-  // } else {
-  //   if (WebRTCService.stopRecording()) {
-  //     isRecording.value = false;
-  //   }
+    // if (!isRecording.value) {
+    //   if (WebRTCService.startRecording()) {
+    //     isRecording.value = true;
+    //   }
+    // } else {
+    //   if (WebRTCService.stopRecording()) {
+    //     isRecording.value = false;
+    //   }
   } else { // Sinon, on demande la permission pour démarrer
     if (awaitingRecordPermission.value) return; // Déjà en attente d'une réponse
 
@@ -497,7 +385,7 @@ const showPlayButton = ref(false);
 const forcePlayRemoteVideo = async () => {
   const remoteVideoEl = remoteVideo.value || document.getElementById("remoteVideo");
   const remoteAudioEl = remoteAudio.value;
-  
+
   if (!remoteVideoEl || !remoteStream.value) {
     console.error('[FORCE PLAY] Élément vidéo ou flux manquant');
     return;
@@ -505,48 +393,48 @@ const forcePlayRemoteVideo = async () => {
 
   try {
     console.log('[FORCE PLAY] Démarrage forcé...');
-    
+
     // 1. Forcer l'audio sur l'élément vidéo
     remoteVideoEl.muted = false;
     remoteVideoEl.volume = 1.0;
-    
+
     // 2. Forcer l'audio sur l'élément audio aussi
     if (remoteAudioEl) {
       remoteAudioEl.muted = false;
       remoteAudioEl.volume = 1.0;
     }
-    
+
     // 3. Forcer l'activation des tracks audio
     const audioTracks = remoteStream.value.getAudioTracks();
     audioTracks.forEach(track => {
       track.enabled = true;
       console.log('[FORCE PLAY] Track audio activé:', track.id);
     });
-    
+
     // 4. Réattacher le flux
     remoteVideoEl.srcObject = null;
     if (remoteAudioEl) remoteAudioEl.srcObject = null;
-    
+
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     remoteVideoEl.srcObject = remoteStream.value;
     if (remoteAudioEl) remoteAudioEl.srcObject = remoteStream.value;
-    
+
     // 5. Forcer la lecture des deux éléments
     await remoteVideoEl.play();
     if (remoteAudioEl) {
       await remoteAudioEl.play();
       console.log('[FORCE PLAY] ✅ Audio element aussi en lecture');
     }
-    
+
     console.log('[FORCE PLAY] ✅ Lecture forcée réussie');
     showPlayButton.value = false;
-    
+
     // 6. Test audio après activation
     setTimeout(() => {
       testAudioPlayback(remoteStream.value);
     }, 1000);
-    
+
   } catch (error) {
     console.error('[FORCE PLAY] Échec:', error);
   }
@@ -685,7 +573,7 @@ const OLD_handleRemoteStream_BACKUP = (stream) => {
 const handleCallStatusChange = (status, userId, withVideo) => {
   console.log('[HANDLE STATUS] Reçu:', status, '| userId:', userId, '| video:', withVideo);
   currentCallStatus.value = status;
-  
+
   // Démarrer le timer quand l'appel est connecté
   if (status === "connected") {
     // S'assurer qu'il n'y a pas déjà un timer en cours
@@ -712,39 +600,39 @@ const handleCallStatusChange = (status, userId, withVideo) => {
   emit("call-status-change", status, userId, withVideo);
 };
 
- // Écouteur pour la réponse de permission d'enregistrement (côté Agent)
- props.socket.on('record-permission-response', ({ from, to, granted }) => {
-    if (props.userRole === 'agent' && to === props.currentUserId && from === props.remoteUserId) {
-      awaitingRecordPermission.value = false;
-      if (granted) {
-        if (WebRTCService.startRecording()) {
-          isRecording.value = true;
-          props.socket.emit('recording-status-changed', { to: props.remoteUserId, recording: true });
-          toast.success("Enregistrement démarré avec l'accord du client.");
-        } else {
-          isRecording.value = false;
-          toast.error("Erreur lors du démarrage de l'enregistrement.");
-        }
+// Écouteur pour la réponse de permission d'enregistrement (côté Agent)
+props.socket.on('record-permission-response', ({ from, to, granted }) => {
+  if (props.userRole === 'agent' && to === props.currentUserId && from === props.remoteUserId) {
+    awaitingRecordPermission.value = false;
+    if (granted) {
+      if (WebRTCService.startRecording()) {
+        isRecording.value = true;
+        props.socket.emit('recording-status-changed', { to: props.remoteUserId, recording: true });
+        toast.success("Enregistrement démarré avec l'accord du client.");
       } else {
         isRecording.value = false;
-        toast.info("Le client a refusé la demande d'enregistrement.");
+        toast.error("Erreur lors du démarrage de l'enregistrement.");
       }
+    } else {
+      isRecording.value = false;
+      toast.info("Le client a refusé la demande d'enregistrement.");
     }
-  });
+  }
+});
 
-  // Écouteur pour savoir si l'appel est en cours d'enregistrement (côté Client)
-  props.socket.on('recording-status-changed', ({ recording }) => {
-    if (props.userRole === 'client') {
-      isCallBeingRecordedByAgent.value = recording;
-      // Vous pouvez utiliser isCallBeingRecordedByAgent.value pour afficher un indicateur au client
-      if (recording) {
-        toast.info("Cet appel est en cours d'enregistrement.", { timeout: 5000 });
-      } else {
-        toast.info("L'enregistrement de l'appel est terminé.", { timeout: 3000 });
-      }
+// Écouteur pour savoir si l'appel est en cours d'enregistrement (côté Client)
+props.socket.on('recording-status-changed', ({ recording }) => {
+  if (props.userRole === 'client') {
+    isCallBeingRecordedByAgent.value = recording;
+    // Vous pouvez utiliser isCallBeingRecordedByAgent.value pour afficher un indicateur au client
+    if (recording) {
+      toast.info("Cet appel est en cours d'enregistrement.", { timeout: 5000 });
+    } else {
+      toast.info("L'enregistrement de l'appel est terminé.", { timeout: 3000 });
     }
-  });
-  
+  }
+});
+
 watch(() => props.callStatus, async (newStatus) => {
   console.log('[WATCH PROPS] callStatus changé:', newStatus);
   currentCallStatus.value = newStatus;
@@ -784,7 +672,7 @@ onMounted(async () => {
     },
     handleCallStatusChange
   );
-  
+
   watch(
     remoteStream,
     (newStream, oldStream) => {
@@ -848,7 +736,7 @@ onMounted(async () => {
   if (props.callStatus === "outgoing" && props.remoteUserId) {
     startOutgoingCall();
   }
-  
+
 });
 
 // ========== LOGIQUE AVATAR ==========
@@ -862,9 +750,9 @@ const MAX_INIT_ATTEMPTS = 3;
 // Fonction pour vérifier si WebRTC est stable
 const isWebRTCStable = () => {
   // Simplifier : si l'appel est connecté et les flux existent, c'est bon
-  return currentCallStatus.value === 'connected' && 
-         remoteStream.value && 
-         localStream.value;
+  return currentCallStatus.value === 'connected' &&
+    remoteStream.value &&
+    localStream.value;
 };
 // const isWebRTCStable = () => {
 //   if (WebRTCService.peerConnection) {
@@ -872,87 +760,87 @@ const isWebRTCStable = () => {
 //     const iceState = pc.iceConnectionState;
 //     const connState = pc.connectionState;
 //     console.log('[WEBRTC] ICE State:', iceState, '| Conn State:', connState);
-    
+
 //     console.log('[WEBRTC CHECK]', {
 //       iceState,
 //       connState,
 //       isStable: (iceState === 'connected' || iceState === 'completed') && 
 //                 (connState === 'connected')
 //     });
-    
+
 //     return (iceState === 'connected' || iceState === 'completed') && 
 //            (connState === 'connected');
 //   }
-  
+
 //   return false;
 // };
 
 // Fonction pour vérifier si le flux est vraiment prêt
 const isStreamReady = (stream) => {
   if (!stream) return false;
-  
+
   const audioTracks = stream.getAudioTracks();
   if (audioTracks.length === 0) {
     console.log('[AVATAR] ⚠️ Aucune piste audio dans le flux');
     return false;
   }
-  
-  const activeAudioTrack = audioTracks.find(track => 
+
+  const activeAudioTrack = audioTracks.find(track =>
     track.readyState === 'live' && track.enabled
   );
-  
+
   if (!activeAudioTrack) {
     console.log('[AVATAR] ⚠️ Aucune piste audio active');
     return false;
   }
-  
+
   console.log('[AVATAR] ✅ Flux audio prêt:', {
     trackCount: audioTracks.length,
     trackState: activeAudioTrack.readyState,
     trackEnabled: activeAudioTrack.enabled
   });
-  
+
   return true;
 };
 
 // Fonction d'initialisation de l'avatar avec retry amélioré
 const initAvatar = async (retryCount = 0) => {
   const attemptNum = retryCount + 1;
-  
+
   try {
     console.log(`[AVATAR] 🚀 Tentative d'initialisation ${attemptNum}/${MAX_INIT_ATTEMPTS}`);
-    
+
     // Vérification 1: Statut de l'appel
     if (currentCallStatus.value !== 'connected') {
       throw new Error('Appel non connecté (status: ' + currentCallStatus.value + ')');
     }
-    
+
     // Vérification 2: WebRTC stable
     if (!isWebRTCStable()) {
       throw new Error('WebRTC non stable, attente...');
     }
-    
+
     // Vérification 3: Flux distant existe et est prêt
     if (!isStreamReady(remoteStream.value)) {
       throw new Error('Flux distant non prêt ou sans audio');
     }
-    
+
     // Vérification 4: L'élément DOM existe
     const container = document.querySelector('.agent-avatar-container');
     if (!container) {
       throw new Error('Conteneur .agent-avatar-container non trouvé');
     }
-    
+
     // ⚠️ IMPORTANT : Vérifier que le flux local existe (micro du client)
     if (!localStream.value) {
       throw new Error('Flux local non disponible (micro du client)');
     }
-    
+
     const localAudioTrack = localStream.value.getAudioTracks()[0];
     if (!localAudioTrack || localAudioTrack.readyState !== 'live') {
       throw new Error('Piste audio locale non disponible ou inactive');
     }
-    
+
     console.log('[AVATAR] ✅ Toutes les vérifications passées, initialisation...');
     console.log('[AVATAR] 📡 Track audio local:', {
       id: localAudioTrack.id,
@@ -960,15 +848,15 @@ const initAvatar = async (retryCount = 0) => {
       state: localAudioTrack.readyState,
       enabled: localAudioTrack.enabled
     });
-    
+
     // Initialiser l'avatar
     await VirtualAvatarService.initialize('agent-avatar-container', {
       timeout: 90000,
       retryAttempts: 3
     });
-    
+
     console.log('[AVATAR] ✅ Avatar initialisé avec succès');
-    
+
     // ⚠️ CRITIQUE : Passer le track audio existant au lieu de demander un nouveau flux
     try {
       await VirtualAvatarService.startAudioStream(localAudioTrack);
@@ -978,57 +866,57 @@ const initAvatar = async (retryCount = 0) => {
       console.warn('[AVATAR] ⚠️ Audio non disponible:', audioError.message);
       toast.warning('Avatar connecté (sans audio)', { timeout: 3000 });
     }
-    
+
     virtualHumanReady.value = true;
     avatarInitialized = true;
     avatarInitAttempts = 0;
-    
+
   } catch (error) {
     console.error(`[AVATAR] ❌ Échec tentative ${attemptNum}:`, error.message);
-    
+
     // Gérer les erreurs spécifiques
     const isResourceBusy = error.message.includes('611');
     const isTimeout = error.message.includes('Timeout');
     const isStreamNotReady = error.message.includes('Flux distant') || error.message.includes('Flux local');
     const isWebRTCNotStable = error.message.includes('WebRTC non stable');
     const isAudioNotAvailable = error.message.includes('Piste audio locale');
-    
+
     // Retry si possible
     if (retryCount < MAX_INIT_ATTEMPTS - 1) {
       let retryDelay;
-      
+
       if (isAudioNotAvailable) {
         // Pour les problèmes de micro, attendre un peu
         retryDelay = 5000;
-        console.log(`[AVATAR] 🔄 Micro pas prêt, retry dans ${retryDelay/1000}s`);
-        toast.info(`Attente du microphone... (${retryDelay/1000}s)`, { timeout: 5000 });
+        console.log(`[AVATAR] 🔄 Micro pas prêt, retry dans ${retryDelay / 1000}s`);
+        toast.info(`Attente du microphone... (${retryDelay / 1000}s)`, { timeout: 5000 });
       } else if (isWebRTCNotStable) {
         retryDelay = 10000;
-        console.log(`[AVATAR] 🔄 WebRTC instable, retry dans ${retryDelay/1000}s`);
-        toast.info(`Attente stabilisation connexion... (${retryDelay/1000}s)`, { timeout: 5000 });
+        console.log(`[AVATAR] 🔄 WebRTC instable, retry dans ${retryDelay / 1000}s`);
+        toast.info(`Attente stabilisation connexion... (${retryDelay / 1000}s)`, { timeout: 5000 });
       } else if (isStreamNotReady) {
         retryDelay = 15000 * (retryCount + 1);
-        console.log(`[AVATAR] 🔄 Flux pas prêt, retry dans ${retryDelay/1000}s`);
-        toast.info(`Attente du flux audio... Retry dans ${retryDelay/1000}s`, { timeout: 5000 });
+        console.log(`[AVATAR] 🔄 Flux pas prêt, retry dans ${retryDelay / 1000}s`);
+        toast.info(`Attente du flux audio... Retry dans ${retryDelay / 1000}s`, { timeout: 5000 });
       } else if (isResourceBusy || isTimeout) {
         retryDelay = 10000 * (retryCount + 1);
-        console.log(`[AVATAR] 🔄 Ressource occupée, retry dans ${retryDelay/1000}s`);
-        toast.info(`Nouvelle tentative dans ${retryDelay/1000}s...`, { timeout: 5000 });
+        console.log(`[AVATAR] 🔄 Ressource occupée, retry dans ${retryDelay / 1000}s`);
+        toast.info(`Nouvelle tentative dans ${retryDelay / 1000}s...`, { timeout: 5000 });
       } else {
         retryDelay = 8000;
-        console.log(`[AVATAR] 🔄 Erreur inconnue, retry dans ${retryDelay/1000}s`);
+        console.log(`[AVATAR] 🔄 Erreur inconnue, retry dans ${retryDelay / 1000}s`);
         toast.warning(`Erreur: ${error.message}. Nouvelle tentative...`, { timeout: 5000 });
       }
-      
+
       avatarInitTimeout = setTimeout(() => {
         initAvatar(retryCount + 1);
       }, retryDelay);
-      
+
     } else {
       console.error('[AVATAR] ❌ Échec après', MAX_INIT_ATTEMPTS, 'tentatives');
       virtualHumanReady.value = false;
       avatarInitialized = false;
-      
+
       if (isResourceBusy) {
         toast.error('Avatar occupé. Veuillez réessayer dans quelques minutes.', { timeout: 7000 });
       } else if (isStreamNotReady || isAudioNotAvailable) {
@@ -1057,25 +945,25 @@ watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], 
     alreadyInitialized: avatarInitialized,
     isClient: props.userRole === 'client'
   });
-  
+
   // Nettoyer les timeouts existants
   if (initDebounceTimeout) {
     clearTimeout(initDebounceTimeout);
     initDebounceTimeout = null;
   }
-  
+
   if (avatarInitTimeout) {
     clearTimeout(avatarInitTimeout);
     avatarInitTimeout = null;
   }
-  
+
   if (webrtcStableTimeout) {
     clearTimeout(webrtcStableTimeout);
     webrtcStableTimeout = null;
   }
-  
+
   // ⚠️ IMPORTANT : Conditions pour initialiser (inclure le flux local)
-  const shouldInitialize = 
+  const shouldInitialize =
     status === 'connected' &&
     remote &&
     local &&  // ← NOUVEAU : vérifier que le flux local existe
@@ -1084,28 +972,29 @@ watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], 
     props.isVideoCall &&
     props.userRole === 'client' &&
     !avatarInitialized;
-  
+
   if (shouldInitialize) {
     console.log('[AVATAR] ✅ Conditions remplies (remote + local), attente stabilisation WebRTC...');
-    
+
     // Attendre que WebRTC soit STABLE avant de lancer l'avatar
     const checkStability = () => {
       if (isWebRTCStable()) {
         console.log('[AVATAR] ✅ WebRTC stable détecté');
-        
+
         // Attendre encore 10 secondes supplémentaires pour sécurité
         const EXTRA_DELAY = 5000;
-        console.log(`[AVATAR] ⏳ Attente de sécurité de ${EXTRA_DELAY/1000}s...`);
-        toast.info(`Préparation de l'avatar... (${EXTRA_DELAY/1000}s)`, { timeout: EXTRA_DELAY });
-        
+        console.log(`[AVATAR] ⏳ Attente de sécurité de ${EXTRA_DELAY / 1000}s...`);
+        toast.info(`Préparation de l'avatar... (${EXTRA_DELAY / 1000}s)`, { timeout: EXTRA_DELAY });
+
         initDebounceTimeout = setTimeout(() => {
-          if (currentCallStatus.value === 'connected' && 
-              isStreamReady(remoteStream.value) &&
-              isStreamReady(localStream.value) &&  // ← Re-vérifier le flux local
-              isWebRTCStable()) {
+          if (currentCallStatus.value === 'connected' &&
+            isStreamReady(remoteStream.value) &&
+            isStreamReady(localStream.value) &&  // ← Re-vérifier le flux local
+            isWebRTCStable()) {
             console.log('[AVATAR] 🚀 Lancement de l\'initialisation');
             initAvatar(0);
-          } else { EXTRA_DELAY = 5000;
+          } else {
+            EXTRA_DELAY = 5000;
             console.log('[AVATAR] ⚠️ Conditions perdues après attente');
           }
         }, EXTRA_DELAY);
@@ -1114,32 +1003,32 @@ watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], 
         webrtcStableTimeout = setTimeout(checkStability, 2000);
       }
     };
-    
+
     // Commencer les vérifications de stabilité
     checkStability();
-    
+
   } else if (status === 'ended' || status === 'disconnected') {
     console.log('[AVATAR] ⚠️ Appel terminé, nettoyage');
-    
+
     if (avatarInitTimeout) {
       clearTimeout(avatarInitTimeout);
       avatarInitTimeout = null;
     }
-    
+
     if (initDebounceTimeout) {
       clearTimeout(initDebounceTimeout);
       initDebounceTimeout = null;
     }
-    
+
     if (webrtcStableTimeout) {
       clearTimeout(webrtcStableTimeout);
       webrtcStableTimeout = null;
     }
-    
+
     avatarInitialized = false;
     avatarInitAttempts = 0;
     virtualHumanReady.value = false;
-    
+
   } else if (!shouldInitialize && !avatarInitialized) {
     const reasons = [];
     if (status !== 'connected') reasons.push(`status=${status}`);
@@ -1149,7 +1038,7 @@ watch([currentCallStatus, remoteStream, localStream], ([status, remote, local], 
     if (local && !isStreamReady(local)) reasons.push('local_not_ready');  // ← NOUVEAU
     if (!props.isVideoCall) reasons.push('not_video_call');
     if (props.userRole !== 'client') reasons.push(`role=${props.userRole}`);
-    
+
     if (reasons.length > 0) {
       console.log('[AVATAR] ⏸️ Initialisation en attente:', reasons.join(', '));
     }
@@ -1162,20 +1051,20 @@ onUnmounted(() => {
     clearTimeout(initDebounceTimeout);
     initDebounceTimeout = null;
   }
-  
+
   if (avatarInitTimeout) {
     clearTimeout(avatarInitTimeout);
     avatarInitTimeout = null;
   }
-  
+
   if (webrtcStableTimeout) {
     clearTimeout(webrtcStableTimeout);
     webrtcStableTimeout = null;
   }
-  
+
   avatarInitialized = false;
   avatarInitAttempts = 0;
-  
+
   VirtualAvatarService.destroy();
 });
 
@@ -1192,11 +1081,11 @@ const handleRemoteVideoCanPlay = () => {
 
 const forceEnableAudio = () => {
   if (!remoteVideo.value) return;
-  
+
   // CRITIQUE : Forcer l'audio à être activé
   remoteVideo.value.muted = false;
   remoteVideo.value.volume = 1.0;
-  
+
   // Vérifier les tracks audio
   const stream = remoteVideo.value.srcObject;
   if (stream) {
@@ -1207,14 +1096,14 @@ const forceEnableAudio = () => {
         console.log('[AUDIO] ✅ Track audio activé:', track.id);
       }
     });
-    
+
     console.log('[AUDIO] État:', {
       muted: remoteVideo.value.muted,
       volume: remoteVideo.value.volume,
       audioTracks: audioTracks.length,
       allEnabled: audioTracks.every(t => t.enabled)
     });
-    
+
     // TEST AUDIO : Vérifier si l'audio fonctionne vraiment
     testAudioPlayback(stream);
   }
@@ -1227,7 +1116,7 @@ const testAudioPlayback = (stream, source = 'UNKNOWN') => {
     console.log(`[AUDIO TEST ${source}] ❌ Aucune piste audio dans le flux`);
     return;
   }
-  
+
   const audioTrack = audioTracks[0];
   console.log(`[AUDIO TEST ${source}] 🔊 Test piste audio:`, {
     id: audioTrack.id,
@@ -1236,46 +1125,46 @@ const testAudioPlayback = (stream, source = 'UNKNOWN') => {
     readyState: audioTrack.readyState,
     muted: audioTrack.muted
   });
-  
+
   // Créer un AudioContext pour analyser l'audio
   if (window.AudioContext || window.webkitAudioContext) {
     try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
-      
+
       source.connect(analyser);
       analyser.fftSize = 256;
-      
+
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       let maxLevel = 0;
       let checksCount = 0;
-      
+
       const checkAudio = () => {
         analyser.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
         maxLevel = Math.max(maxLevel, average);
         checksCount++;
-        
+
         if (average > 0) {
           console.log(`[AUDIO TEST ${source}] 🎵 Signal audio détecté, niveau:`, average);
         }
       };
-      
+
       // Vérifier pendant 3 secondes
       const interval = setInterval(checkAudio, 200);
       setTimeout(() => {
         clearInterval(interval);
-        
+
         if (maxLevel === 0) {
           console.log(`[AUDIO TEST ${source}] 🔇 Aucun signal audio détecté après ${checksCount} vérifications`);
         } else {
           console.log(`[AUDIO TEST ${source}] ✅ Signal détecté ! Niveau max:`, maxLevel);
         }
-        
+
         audioContext.close();
       }, 3000);
-      
+
     } catch (error) {
       console.log(`[AUDIO TEST ${source}] ❌ Erreur AudioContext:`, error);
     }
@@ -1294,14 +1183,14 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
       console.log('[WATCHER] Flux local attaché à la vidéo');
     }
   }
-  
+
   if (localAudio.value && localStream.value) {
     if (localAudio.value.srcObject !== localStream.value) {
       localAudio.value.srcObject = localStream.value;
       console.log('[WATCHER] Flux local attaché à l\'audio (test)');
     }
   }
-  
+
   // Attacher le flux distant à la vidéo ET à l'audio
   if (remoteVideo.value && remoteStream.value) {
     // Vérifier si le flux a changé
@@ -1310,33 +1199,33 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
       forceEnableAudio();
       return;
     }
-    
+
     console.log('[WATCHER] Attachement flux distant, tracks:', remoteStream.value.getTracks().length);
-    
+
     remoteStream.value.getTracks().forEach(track => {
       console.log('[WATCHER] Track:', track.kind, 'enabled:', track.enabled, 'readyState:', track.readyState);
     });
-    
+
     // Attacher le flux à la vidéo
     remoteVideo.value.srcObject = remoteStream.value;
-    
+
     // CRITIQUE : Forcer immédiatement l'audio AVANT play()
     remoteVideo.value.muted = false;
     remoteVideo.value.volume = 1.0;
-    
+
     console.log('[WATCHER] srcObject défini, tentative de lecture...');
-    
+
     // Tenter la lecture
     remoteVideo.value.play().then(() => {
       console.log('[WATCHER] ✅ Vidéo distante en lecture');
-      
+
       // Forcer l'audio après le démarrage
       forceEnableAudio();
-      
+
       // Double vérification après 1 seconde
       setTimeout(() => {
         forceEnableAudio();
-        
+
         // Vérification finale
         const audioTracks = remoteStream.value.getAudioTracks();
         console.log('[WATCHER] ✅ Vérification finale audio:', {
@@ -1348,7 +1237,7 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
       }, 1000);
     }).catch(error => {
       console.error('[WATCHER] ❌ Erreur autoplay:', error.name, error.message);
-      
+
       // Si l'autoplay échoue, essayer de forcer quand même l'audio
       if (error.name === 'NotAllowedError') {
         console.log('[WATCHER] ⚠️ Autoplay bloqué, audio sera activé dès interaction utilisateur');
@@ -1356,7 +1245,7 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
       }
     });
   }
-  
+
   // Attacher aussi le flux distant à la balise audio pour test
   if (remoteAudio.value && remoteStream.value) {
     if (remoteAudio.value.srcObject !== remoteStream.value) {
@@ -1364,16 +1253,16 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
       remoteAudio.value.volume = 1.0; // Volume max pour test
       remoteAudio.value.muted = false; // S'assurer que ce n'est pas muted
       console.log('[WATCHER] ✅ Flux distant attaché à l\'audio de test');
-      
+
       // Tester la lecture audio avec interaction utilisateur si nécessaire
       const playAudio = async () => {
         try {
           await remoteAudio.value.play();
           console.log('[AUDIO TEST] ✅ Audio distant en lecture');
-          
+
           // TEST IMMÉDIAT : Vérifier le signal audio
           testAudioPlayback(remoteStream.value);
-          
+
           // Vérifier après 1 seconde si l'audio joue vraiment
           setTimeout(() => {
             console.log('[AUDIO TEST] État final:', {
@@ -1383,7 +1272,7 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
               currentTime: remoteAudio.value.currentTime
             });
           }, 1000);
-          
+
         } catch (error) {
           console.log('[AUDIO TEST] ⚠️ Erreur lecture audio:', error.name);
           if (error.name === 'NotAllowedError') {
@@ -1393,11 +1282,11 @@ watch([localVideo, remoteVideo, localAudio, remoteAudio, localStream, remoteStre
           }
         }
       };
-      
+
       playAudio();
     }
   }
-  
+
   if (!remoteVideo.value || !remoteStream.value) {
     console.log('[WATCHER] Manquant - remoteVideo:', !!remoteVideo.value, 'remoteStream:', !!remoteStream.value);
   }
@@ -1442,11 +1331,11 @@ const initPeerJS = async () => {
       peerConnection.value.destroy();
       peerConnection.value = null;
     }
-    
+
     return new Promise((resolve, reject) => {
       // Générer un ID unique pour PeerJS
       const peerId = `${props.currentUserId}_${Date.now()}`;
-      
+
       peerConnection.value = new Peer(peerId, {
         debug: 2,
         config: {
@@ -1475,7 +1364,7 @@ const initPeerJS = async () => {
       peerConnection.value.on("open", (id) => {
         console.log('[PEERJS] Connexion ouverte avec ID:', id);
         localPeerId.value = id; // Stocker notre ID local
-        
+
         // Émettre notre ID PeerJS via socket
         console.log('[PEERJS] Émission de notre ID vers:', props.remoteUserId);
         console.log('[PEERJS] Données émises:', {
@@ -1483,7 +1372,7 @@ const initPeerJS = async () => {
           userId: props.currentUserId,
           to: props.remoteUserId
         });
-        
+
         props.socket.emit('peerjs-id', {
           peerId: id,
           userId: props.currentUserId,
@@ -1624,7 +1513,7 @@ const stopScreenShare = async () => {
       from: props.currentUserId,
       to: props.remoteUserId,
     });
-    
+
     toast.info("Partage d'écran arrêté");
   } catch (error) {
     toast.error("Erreur lors de l'arrêt du partage d'écran");
@@ -1801,6 +1690,7 @@ const toggleVideo = () => {
   text-align: center;
   max-width: 100px;
 }
+
 .call-container {
   position: relative;
   width: 100%;
@@ -1816,14 +1706,12 @@ const toggleVideo = () => {
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) !important; /* Supprimer l'effet miroir */
   width: 80%;
   height: 80%;
   object-fit: contain;
   border-radius: 12px;
-  /* z-index: 100; */
 }
-
 .remote-stream-container {
   flex: 1;
   display: flex;
@@ -1840,12 +1728,17 @@ const toggleVideo = () => {
   height: 100% !important;
   object-fit: cover !important;
   display: block !important;
-  transform: scaleX(-1);
+  transform: scaleX(-1); /* Effet miroir seulement pour la caméra normale */
 }
 
 .remote-stream-container video.screen-sharing {
-  transform: none !important;
+  transform: translate(-50%, -50%) !important; /* Pas d'effet miroir pour le partage d'écran */
   object-fit: contain !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  width: 80% !important;
+  height: 80% !important;
 }
 
 .local-stream-container {
@@ -1986,6 +1879,7 @@ const toggleVideo = () => {
   font-size: 1.2rem;
   font-weight: bold;
 }
+
 .call-status {
   position: absolute;
   top: 20px;
@@ -2002,20 +1896,12 @@ const toggleVideo = () => {
 }
 
 /* Style pour l'avatar */
-.agent-avatar-container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
 .agent-avatar-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
+
 .agent-avatar-container {
   width: 100%;
   height: 100%;
@@ -2023,24 +1909,52 @@ const toggleVideo = () => {
   top: 0;
   left: 0;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
   overflow: hidden;
 }
 
 .agent-avatar-container canvas {
-  max-width: 600px !important;
-  max-height: 90% !important;
-  width: auto !important;
-  height: auto !important;
+  display: block !important;
+  margin: 0 auto !important;
+  position: relative !important;
+  left: 0 !important;
+  top: 0 !important;
+  transform: none !important;
   object-fit: contain !important;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 768px) {
+  .agent-avatar-container canvas {
+    max-width: 90vw !important;
+    max-height: 70vh !important;
+  }
+}
+
+.remote-stream-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+  min-height: 400px;
+  background: #000;
+}
+
+/* Ajoutez cette règle pour le conteneur avatar */
+.remote-stream-container .agent-avatar-container {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
 .avatar-iframe {

@@ -441,12 +441,65 @@ class VirtualAvatarService {
             },
             onGetHeightAndWidth: (frame) => {
               const { width, height } = frame;
-              const div = document.querySelector(`.${mountClass}`);
-              if (div) {
-                div.style.width = '100%';
-                div.style.height = '100%';
-                console.log(`[AVATAR] Dimensions ajustées: ${div.style.width} x ${div.style.height}`);
-              }
+              console.log(`[AVATAR] Dimensions reçues: ${width}x${height}`);
+              
+              const container = document.querySelector(`.${mountClass}`);
+              if (!container) return;
+              
+              const applyCanvasStyles = (canvas) => {
+                if (!canvas) return;
+                
+                // Calculer les dimensions adaptatives
+                const maxWidth = Math.min(500, window.innerWidth * 0.4);
+                const maxHeight = Math.min(650, window.innerHeight * 0.7);
+                const aspectRatio = width / height;
+                
+                let finalWidth = maxWidth;
+                let finalHeight = finalWidth / aspectRatio;
+                
+                if (finalHeight > maxHeight) {
+                  finalHeight = maxHeight;
+                  finalWidth = finalHeight * aspectRatio;
+                }
+                
+                // Appliquer les styles de dimension
+                canvas.style.setProperty('width', `${finalWidth}px`, 'important');
+                canvas.style.setProperty('height', `${finalHeight}px`, 'important');
+                
+                // CRITIQUE : Forcer le centrage en annulant le positionnement absolu
+                canvas.style.setProperty('position', 'relative', 'important');
+                canvas.style.setProperty('left', '0', 'important');
+                canvas.style.setProperty('top', '0', 'important');
+                canvas.style.setProperty('transform', 'none', 'important');
+                canvas.style.setProperty('margin', '0 auto', 'important');
+                canvas.style.setProperty('display', 'block', 'important');
+                
+                console.log(`[AVATAR] Canvas ajusté: ${finalWidth}x${finalHeight}px`);
+              };
+              
+              // Observer pour forcer les styles en continu
+              const observer = new MutationObserver(() => {
+                const canvas = container.querySelector('canvas');
+                if (canvas) applyCanvasStyles(canvas);
+              });
+              
+              observer.observe(container, {
+                attributes: true,
+                childList: true,
+                subtree: true,
+                attributeFilter: ['style']
+              });
+              
+              // Appliquer immédiatement et avec délais
+              setTimeout(() => {
+                const canvas = container.querySelector('canvas');
+                applyCanvasStyles(canvas);
+              }, 100);
+              
+              setTimeout(() => {
+                const canvas = container.querySelector('canvas');
+                applyCanvasStyles(canvas);
+              }, 500);
             }
           };
 
