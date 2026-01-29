@@ -68,10 +68,10 @@ const loadSDK = () => {
       if (import.meta.env.DEV && window.axios) {
         console.log('[SDK] Installation de l\'intercepteur Axios...');
         window.axios.interceptors.request.use((config) => {
-          if (config.url?.includes('37.64.205.84')) {
+          if (config.url?.includes('avatar-ia.vippinterstis.com')) {
             const originalUrl = config.url;
-            config.url = config.url.replace('https://37.64.205.84', window.location.origin);
-            config.baseURL = config.baseURL?.replace('https://37.64.205.84', window.location.origin) || '';
+            config.url = config.url.replace('https://avatar-ia.vippinterstis.com', window.location.origin);
+            config.baseURL = config.baseURL?.replace('https://avatar-ia.vippinterstis.com', window.location.origin) || '';
             console.log('[SDK INTERCEPTOR] Axios réécrit:', originalUrl, '→', config.url);
           }
           return config;
@@ -96,12 +96,14 @@ class VirtualAvatarService {
     this.isInitialized = false;
     this.audioProcessor = null;
     this.audioSource = null;
-    this.baseUrl = 'https://37.64.205.84';
+    this.baseUrl = 'https://avatar-ia.vippinterstis.com';
     this.subscriptionKey = import.meta.env.VITE_APP_SUBSCRIPTION_KEY || 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9';
     this.initTimeout = null;
     this.connectionState = 'idle';
     this.diagnosticLogs = [];
     this.useProxy = false; // Désactiver le proxy par défaut pour le SDK
+    this.preInitializedAvatar = null; // Avatar pré-initialisé
+    this.preInitializedData = null; // Données pré-chargées
   }
 
   async runDiagnostics() {
@@ -274,13 +276,66 @@ class VirtualAvatarService {
     }
   }
 
+  async preInitialize(selectedAvatar) {
+    try {
+      console.log('[AVATAR PRE-INIT] Préparation avatar:', selectedAvatar);
+      
+      await loadSDK();
+      
+      // Pré-charger les données nécessaires
+      const humanInfoData = await this.fetchWithFallback('/openapi/interactive/listVhInfo');
+      if (!humanInfoData.data?.length) throw new Error('Aucun Virtual Human disponible');
+      
+      const signatureData = await this.fetchWithFallback('/openapi/signature/gen');
+      if (!signatureData.data) throw new Error('Signature invalide');
+      
+      // Trouver l'avatar sélectionné
+      let rawHumanInfo = humanInfoData.data.find(avatar => 
+        avatar.name && avatar.name.includes(selectedAvatar)
+      );
+      
+      if (!rawHumanInfo) {
+        console.warn(`[AVATAR PRE-INIT] Avatar '${selectedAvatar}' non trouvé, sélection aléatoire`);
+        const randomIndex = Math.floor(Math.random() * humanInfoData.data.length);
+        rawHumanInfo = humanInfoData.data[randomIndex];
+      }
+      
+      const humanInfo = {
+        id: rawHumanInfo.id,
+        name: rawHumanInfo.name,
+        modelConfigPrefix: rawHumanInfo.modelConfigPrefix,
+        voice: rawHumanInfo.voice,
+        extra: rawHumanInfo.extra,
+        capabilities: Array.isArray(rawHumanInfo.capabilities) ? rawHumanInfo.capabilities : [],
+        supportedLanguages: Array.isArray(rawHumanInfo.supportedLanguages) ? rawHumanInfo.supportedLanguages : [],
+        ...rawHumanInfo
+      };
+      
+      // Stocker les données pré-chargées
+      this.preInitializedData = {
+        humanInfo,
+        signature: signatureData.data
+      };
+      
+      this.preInitializedAvatar = selectedAvatar;
+      console.log('[AVATAR PRE-INIT] ✓ Données pré-chargées pour:', humanInfo.name);
+      
+    } catch (error) {
+      console.error('[AVATAR PRE-INIT] Erreur:', error);
+      throw error;
+    }
+  }
+
   async initialize(mountClass, options = {}) {
     try {
       console.log('[AVATAR] Début initialisation...');
 
-      // Bloquer si pas de classe de montage
-      if (!mountClass || !document.querySelector(`.${mountClass}`)) {
-        throw new Error(`Élément .${mountClass} non trouvé`);
+      // Support pour ID ou classe
+      const selector = options.useId ? `#${mountClass}` : `.${mountClass}`;
+      const mountElement = document.querySelector(selector);
+      
+      if (!mountElement) {
+        throw new Error(`Élément ${selector} non trouvé`);
       }
 
       this.cleanup();
@@ -288,16 +343,27 @@ class VirtualAvatarService {
       const config = {
         timeout: options.timeout || 60000,
         retryAttempts: options.retryAttempts || 2,
+        selectedAvatar: options.selectedAvatar, // Nouvel option pour l'avatar sélectionné
         ...options
       };
 
       await loadSDK();
 
-      const mountElement = document.querySelector(`.${mountClass}`);
-      if (!mountElement) throw new Error(`Élément .${mountClass} non trouvé`);
-      console.log('[AVATAR] Élément DOM trouvé');
+      console.log('[AVATAR] Élément DOM trouvé:', selector);
 
       let humanInfoData, signatureData;
+      
+      // Utiliser les données pré-chargées si disponibles
+      if (this.preInitializedData && (!config.selectedAvatar || config.selectedAvatar === this.preInitializedAvatar)) {
+        console.log('[AVATAR] Utilisation des données pré-chargées');
+        const humanInfo = this.preInitializedData.humanInfo;
+        const signature = this.preInitializedData.signature;
+        
+        // Passer directement à l'initialisation
+        return this.initializeWithData(mountElement, humanInfo, signature, config);
+      }
+      
+      // Sinon, charger normalement
       for (let attempt = 1; attempt <= config.retryAttempts; attempt++) {
         try {
           console.log(`[AVATAR] Tentative ${attempt}/${config.retryAttempts} - Récupération des données...`);
@@ -316,10 +382,27 @@ class VirtualAvatarService {
         }
       }
 
-      // Sélectionner un avatar aléatoire
-      const randomIndex = Math.floor(Math.random() * humanInfoData.data.length);
-      const rawHumanInfo = humanInfoData.data[randomIndex];
-      console.log(`[AVATAR] Avatar sélectionné: ${randomIndex + 1}/${humanInfoData.data.length} - ${rawHumanInfo.name}`);
+      // Sélectionner l'avatar selon le nom fourni ou aléatoirement
+      let rawHumanInfo;
+      if (config.selectedAvatar) {
+        // Chercher l'avatar par nom
+        rawHumanInfo = humanInfoData.data.find(avatar => 
+          avatar.name && avatar.name.includes(config.selectedAvatar)
+        );
+        
+        if (rawHumanInfo) {
+          console.log(`[AVATAR] Avatar trouvé par nom: ${rawHumanInfo.name}`);
+        } else {
+          console.warn(`[AVATAR] Avatar '${config.selectedAvatar}' non trouvé, sélection aléatoire`);
+          const randomIndex = Math.floor(Math.random() * humanInfoData.data.length);
+          rawHumanInfo = humanInfoData.data[randomIndex];
+        }
+      } else {
+        // Sélection aléatoire par défaut
+        const randomIndex = Math.floor(Math.random() * humanInfoData.data.length);
+        rawHumanInfo = humanInfoData.data[randomIndex];
+        console.log(`[AVATAR] Avatar sélectionné aléatoirement: ${randomIndex + 1}/${humanInfoData.data.length} - ${rawHumanInfo.name}`);
+      }
       
       const humanInfo = {
         id: rawHumanInfo.id,
@@ -335,195 +418,197 @@ class VirtualAvatarService {
 
       console.log('[AVATAR] HumanInfo et signature prêts', humanInfo);
 
-
-      return new Promise((resolve, reject) => {
-        this.connectionState = 'connecting';
-        let isResolved = false;
-        const startTime = Date.now();
-
-        const heartbeatInterval = setInterval(() => {
-          const elapsed = Math.floor((Date.now() - startTime) / 1000);
-          console.log(`[AVATAR] Connexion en cours... (${elapsed}s écoulées, état: ${this.connectionState})`);
-        }, 5000);
-
-        this.initTimeout = setTimeout(() => {
-          if (!isResolved) {
-            clearInterval(heartbeatInterval);
-            this.connectionState = 'failed';
-            console.error('[AVATAR] Timeout - Connexion impossible après', config.timeout / 1000, 'secondes');
-            this.cleanup();
-            reject(new Error(`Timeout: Connexion impossible au serveur après ${config.timeout / 1000}s`));
-          }
-        }, config.timeout);
-
-        // ⚠️ IMPORTANT : Utiliser des serveurs STUN DIFFÉRENTS pour éviter les conflits
-        // Ne pas utiliser les mêmes que WebRTC principal (stun.l.google.com)
-        const iceServers = [
-          { urls: 'stun:stun.voip.blackberry.com:3478' },
-          { urls: 'stun:stun.stunprotocol.org:3478' },
-          { urls: 'stun:stun.sipgate.net:3478' }
-        ];
-
-        try {
-          const isDevelopment = import.meta.env.DEV;
-
-          // Configuration du SDK
-          const sdkConfig = {
-            mountClass,
-            humanInfo,
-            signature,
-            iceServers,
-            proxyServer: isDevelopment ? {
-              protocol: window.location.protocol.replace(':', ''),
-              host: window.location.host,
-            } : {
-              protocol: 'https',
-              host: '37.64.205.84'
-            },
-            ...(isDevelopment && { baseURL: window.location.origin }),
-            onError: (code, msg) => {
-              if (!isResolved) {
-                clearTimeout(this.initTimeout);
-                clearInterval(heartbeatInterval);
-                this.connectionState = 'failed';
-
-                if (code === 611) {
-                  console.error('[AVATAR] ⚠️ Ressource occupée (code 611)');
-                } else if (code === 624) {
-                  console.error('[AVATAR] ⚠️ Erreur inconnue (code 624)');
-                } else {
-                  console.error('[AVATAR] SDK Erreur:', code, msg);
-                }
-
-                this.cleanup();
-                isResolved = true;
-                reject(new Error(`Erreur SDK ${code}: ${msg}`));
-              }
-            },
-            onInited: () => {
-              console.log('[AVATAR] ✓ SDK initialisé');
-              try {
-                console.log('[AVATAR] → Démarrage RTC...');
-                this.client.startRTC();
-              } catch (e) {
-                if (!isResolved) {
-                  console.error('[AVATAR] ✗ Erreur startRTC:', e);
-                  clearTimeout(this.initTimeout);
-                  clearInterval(heartbeatInterval);
-                  this.connectionState = 'failed';
-                  this.cleanup();
-                  isResolved = true;
-                  reject(e);
-                }
-              }
-            },
-            onJoinRoom: () => {
-              if (!isResolved) {
-                clearTimeout(this.initTimeout);
-                clearInterval(heartbeatInterval);
-                this.connectionState = 'connected';
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                console.log(`[AVATAR] ✓ Connecté avec succès à la room (${elapsed}s)`);
-                this.isInitialized = true;
-                isResolved = true;
-                resolve();
-              }
-            },
-            onConnecting: () => {
-              console.log('[AVATAR] → Établissement de la connexion...');
-            },
-            onConnected: () => {
-              console.log('[AVATAR] ✓ Connexion établie avec le serveur');
-            },
-            onDisconnected: () => {
-              console.warn('[AVATAR] ⚠ Déconnexion du serveur');
-              this.connectionState = 'idle';
-            },
-            onGetHeightAndWidth: (frame) => {
-              const { width, height } = frame;
-              console.log(`[AVATAR] Dimensions reçues: ${width}x${height}`);
-              
-              const container = document.querySelector(`.${mountClass}`);
-              if (!container) return;
-              
-              const applyCanvasStyles = (canvas) => {
-                if (!canvas) return;
-                
-                // Calculer les dimensions adaptatives
-                const maxWidth = Math.min(500, window.innerWidth * 0.4);
-                const maxHeight = Math.min(650, window.innerHeight * 0.7);
-                const aspectRatio = width / height;
-                
-                let finalWidth = maxWidth;
-                let finalHeight = finalWidth / aspectRatio;
-                
-                if (finalHeight > maxHeight) {
-                  finalHeight = maxHeight;
-                  finalWidth = finalHeight * aspectRatio;
-                }
-                
-                // Appliquer les styles de dimension
-                canvas.style.setProperty('width', `${finalWidth}px`, 'important');
-                canvas.style.setProperty('height', `${finalHeight}px`, 'important');
-                
-                // CRITIQUE : Forcer le centrage en annulant le positionnement absolu
-                canvas.style.setProperty('position', 'relative', 'important');
-                canvas.style.setProperty('left', '0', 'important');
-                canvas.style.setProperty('top', '0', 'important');
-                canvas.style.setProperty('transform', 'none', 'important');
-                canvas.style.setProperty('margin', '0 auto', 'important');
-                canvas.style.setProperty('display', 'block', 'important');
-                
-                console.log(`[AVATAR] Canvas ajusté: ${finalWidth}x${finalHeight}px`);
-              };
-              
-              // Observer pour forcer les styles en continu
-              const observer = new MutationObserver(() => {
-                const canvas = container.querySelector('canvas');
-                if (canvas) applyCanvasStyles(canvas);
-              });
-              
-              observer.observe(container, {
-                attributes: true,
-                childList: true,
-                subtree: true,
-                attributeFilter: ['style']
-              });
-              
-              // Appliquer immédiatement et avec délais
-              setTimeout(() => {
-                const canvas = container.querySelector('canvas');
-                applyCanvasStyles(canvas);
-              }, 100);
-              
-              setTimeout(() => {
-                const canvas = container.querySelector('canvas');
-                applyCanvasStyles(canvas);
-              }, 500);
-            }
-          };
-
-          console.log('[AVATAR] Configuration SDK:', sdkConfig);
-          this.client = new window.owtRTC(sdkConfig);
-
-        } catch (error) {
-          if (!isResolved) {
-            clearTimeout(this.initTimeout);
-            clearInterval(heartbeatInterval);
-            this.connectionState = 'failed';
-            console.error('[AVATAR] ✗ Erreur création client:', error);
-            this.cleanup();
-            isResolved = true;
-            reject(error);
-          }
-        }
-      });
+      return this.initializeWithData(mountElement, humanInfo, signature, config);
 
     } catch (error) {
       console.error('[AVATAR] ✗ Initialisation échouée:', error);
       this.cleanup();
       throw error;
     }
+  }
+
+  initializeWithData(mountElement, humanInfo, signature, config) {
+    return new Promise((resolve, reject) => {
+      this.connectionState = 'connecting';
+      let isResolved = false;
+      const startTime = Date.now();
+
+      const heartbeatInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        console.log(`[AVATAR] Connexion en cours... (${elapsed}s écoulées, état: ${this.connectionState})`);
+      }, 5000);
+
+      this.initTimeout = setTimeout(() => {
+        if (!isResolved) {
+          clearInterval(heartbeatInterval);
+          this.connectionState = 'failed';
+          console.error('[AVATAR] Timeout - Connexion impossible après', config.timeout / 1000, 'secondes');
+          this.cleanup();
+          reject(new Error(`Timeout: Connexion impossible au serveur après ${config.timeout / 1000}s`));
+        }
+      }, config.timeout);
+
+      // ⚠️ IMPORTANT : Utiliser des serveurs STUN DIFFÉRENTS pour éviter les conflits
+      // Ne pas utiliser les mêmes que WebRTC principal (stun.l.google.com)
+      const iceServers = [
+        { urls: 'stun:stun.voip.blackberry.com:3478' },
+        { urls: 'stun:stun.stunprotocol.org:3478' },
+        { urls: 'stun:stun.sipgate.net:3478' }
+      ];
+
+      try {
+        const isDevelopment = import.meta.env.DEV;
+
+        // Configuration du SDK
+        const sdkConfig = {
+          mountClass: mountElement.className.replace('.', ''),
+          humanInfo,
+          signature,
+          iceServers,
+          proxyServer: isDevelopment ? {
+            protocol: window.location.protocol.replace(':', ''),
+            host: window.location.host,
+          } : {
+            protocol: 'https',
+            host: 'avatar-ia.vippinterstis.com'
+          },
+          ...(isDevelopment && { baseURL: window.location.origin }),
+          onError: (code, msg) => {
+            if (!isResolved) {
+              clearTimeout(this.initTimeout);
+              clearInterval(heartbeatInterval);
+              this.connectionState = 'failed';
+
+              if (code === 611) {
+                console.error('[AVATAR] ⚠️ Ressource occupée (code 611)');
+              } else if (code === 624) {
+                console.error('[AVATAR] ⚠️ Erreur inconnue (code 624)');
+              } else {
+                console.error('[AVATAR] SDK Erreur:', code, msg);
+              }
+
+              this.cleanup();
+              isResolved = true;
+              reject(new Error(`Erreur SDK ${code}: ${msg}`));
+            }
+          },
+          onInited: () => {
+            console.log('[AVATAR] ✓ SDK initialisé');
+            try {
+              console.log('[AVATAR] → Démarrage RTC...');
+              this.client.startRTC();
+            } catch (e) {
+              if (!isResolved) {
+                console.error('[AVATAR] ✗ Erreur startRTC:', e);
+                clearTimeout(this.initTimeout);
+                clearInterval(heartbeatInterval);
+                this.connectionState = 'failed';
+                this.cleanup();
+                isResolved = true;
+                reject(e);
+              }
+            }
+          },
+          onJoinRoom: () => {
+            if (!isResolved) {
+              clearTimeout(this.initTimeout);
+              clearInterval(heartbeatInterval);
+              this.connectionState = 'connected';
+              const elapsed = Math.floor((Date.now() - startTime) / 1000);
+              console.log(`[AVATAR] ✓ Connecté avec succès à la room (${elapsed}s)`);
+              this.isInitialized = true;
+              isResolved = true;
+              resolve();
+            }
+          },
+          onConnecting: () => {
+            console.log('[AVATAR] → Établissement de la connexion...');
+          },
+          onConnected: () => {
+            console.log('[AVATAR] ✓ Connexion établie avec le serveur');
+          },
+          onDisconnected: () => {
+            console.warn('[AVATAR] ⚠ Déconnexion du serveur');
+            this.connectionState = 'idle';
+          },
+          onGetHeightAndWidth: (frame) => {
+            const { width, height } = frame;
+            console.log(`[AVATAR] Dimensions reçues: ${width}x${height}`);
+            
+            const container = mountElement;
+            if (!container) return;
+            
+            const applyCanvasStyles = (canvas) => {
+              if (!canvas) return;
+              
+              const aspectRatio = width / height;
+              const screenWidth = window.innerWidth;
+              
+              let heightPercent;
+              if (screenWidth < 768) {
+                heightPercent = 0.75;
+              } else if (screenWidth < 1024) {
+                heightPercent = 0.85;
+              } else {
+                heightPercent = 0.95;
+              }
+              
+              const maxHeight = window.innerHeight * heightPercent;
+              let finalHeight = maxHeight;
+              let finalWidth = finalHeight * aspectRatio;
+              
+              canvas.style.setProperty('width', `${finalWidth}px`, 'important');
+              canvas.style.setProperty('height', `${finalHeight}px`, 'important');
+              canvas.style.setProperty('position', 'absolute', 'important');
+              canvas.style.setProperty('bottom', '0', 'important');
+              canvas.style.setProperty('left', '50%', 'important');
+              canvas.style.setProperty('transform', 'translateX(-50%)', 'important');
+              canvas.style.setProperty('display', 'block', 'important');
+              
+              console.log(`[AVATAR] Canvas responsive: ${finalWidth}x${finalHeight}px (${heightPercent * 100}%)`);
+            };
+            
+            // Observer pour forcer les styles en continu
+            const observer = new MutationObserver(() => {
+              const canvas = container.querySelector('canvas');
+              if (canvas) applyCanvasStyles(canvas);
+            });
+            
+            observer.observe(container, {
+              attributes: true,
+              childList: true,
+              subtree: true,
+              attributeFilter: ['style']
+            });
+            
+            // Appliquer immédiatement et avec délais
+            setTimeout(() => {
+              const canvas = container.querySelector('canvas');
+              applyCanvasStyles(canvas);
+            }, 100);
+            
+            setTimeout(() => {
+              const canvas = container.querySelector('canvas');
+              applyCanvasStyles(canvas);
+            }, 500);
+          }
+        };
+
+        console.log('[AVATAR] Configuration SDK:', sdkConfig);
+        this.client = new window.owtRTC(sdkConfig);
+
+      } catch (error) {
+        if (!isResolved) {
+          clearTimeout(this.initTimeout);
+          clearInterval(heartbeatInterval);
+          this.connectionState = 'failed';
+          console.error('[AVATAR] ✗ Erreur création client:', error);
+          this.cleanup();
+          isResolved = true;
+          reject(error);
+        }
+      }
+    });
   }
 
   async startAudioStream(existingAudioTrack = null) {

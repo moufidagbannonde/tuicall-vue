@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container ">
     <!-- Modal de saisie du nom -->
     <div v-if="!currentUserId" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96">
@@ -33,7 +33,7 @@
     <CallView v-if="isInCall" :socket="socket" :current-user-id="currentUserId" :remote-user-id="remoteUserId"
       :is-video-call="isVideoCall" :call-status="callStatus" :is-incoming="isIncomingCall" @call-ended="handleCallEnded"
       :initial-local-stream="localStream" @call-status-change="handleCallStatusChange"
-      @video-disabled="handleVideoDisabled" :user-role="userRole" />
+      @video-disabled="handleVideoDisabled" :user-role="userRole" :agent-sex="agentSex" :avatar-ready="avatarReady" />
 
     <!-- Incoming Call Modal -->
     <div v-if="callStatus === 'incoming'"
@@ -116,6 +116,7 @@ import { io } from "socket.io-client";
 import CallControls from "./components/CallControls.vue";
 import CallView from "./components/CallView.vue";
 import WebRTCService from "./services/WebRTCService";
+import VirtualAvatarService from "./services/VirtualAvatarService";
 import CryptoJS from "crypto-js";
 
 // Generate a random user ID
@@ -136,6 +137,8 @@ const isIncomingCall = ref(false);
 const localStream = ref(null);
 const agentId = ref(null);
 const clientId = ref(null);
+const agentSex = ref(null); // Nouveau: sexe de l'agent
+const avatarReady = ref(false); // État de préparation de l'avatar
 const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs en ligne
 const showRecordPermissionModal = ref(false);
 const recordRequesterId = ref(null); // ID de l'agent demandant l'enregistrement
@@ -188,25 +191,39 @@ function decryptData(encryptedData) {
  */
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search);
-  for (const [key, value] of urlParams.entries()) {
+const token = urlParams.get("token");
+const role = urlParams.get("role");
+
+if (token) {
+  try {
+    const decryptedData = JSON.parse(decryptData(token));
+    const { agentId: decryptedAgentId, clientId: decryptedClientId, agentSex: decryptedAgentSex, withVideo } = decryptedData;
+    
+    agentId.value = decryptedAgentId;
+    clientId.value = decryptedClientId;
+    userRole.value = role;
+    isVideoCall.value = withVideo; // Définir le type d'appel dès l'initialisation
+    agentSex.value = decryptedAgentSex; // Stocker le sexe de l'agent
+    
+    // Maintenant vous avez accès à agentSex et withVideo aussi
+    console.log('Session data:', { agentId: agentId.value, clientId: clientId.value, role, agentSex: agentSex.value, withVideo });
+
+    if (agentId.value && role === "agent") {
+      initializeConnection(agentId.value);
+    } else if (clientId.value && role === "client") {
+      initializeConnection(clientId.value);
+      // Préparer l'avatar dès que le client se connecte
+      prepareAvatar();
+    } else {
+      console.error('Configuration invalide:', { agentId: agentId.value, clientId: clientId.value, role });
+    }
+  } catch (error) {
+    console.error('Erreur lors du décryptage du token:', error);
   }
+} else {
+  console.error('Token manquant dans l\'URL');
+}
 
-  agentId.value = decryptData(urlParams.get("agentId"));
-  clientId.value = decryptData(urlParams.get("clientId"));
-  const role = urlParams.get("role");
-  userRole.value = role;
-
-  console.log('IDs décryptés:', { agentId: agentId.value, clientId: clientId.value, role });
-
-  if (agentId.value && role === "agent") {
-    // Initialiser la connexion en tant qu'agent avec l'ID de l'agent
-    initializeConnection(agentId.value);
-  } else if (clientId.value && role === "client") {
-    // Initialiser la connexion en tant que client avec l'ID du client
-    initializeConnection(clientId.value);
-  } else {
-    console.error('Configuration invalide:', { agentId: agentId.value, clientId: clientId.value, role });
-  }
 });
 
 // Écouteur pour la demande de permission d'enregistrement (côté Client)
@@ -270,7 +287,7 @@ socket.value = io("https://webcall.vippinterstis.com:8000", {
       setTimeout(async () => {
         try {
           // Obtenir d'abord les permissions média
-          const mediaResult = await WebRTCService.getLocalMedia(true);
+          const mediaResult = await WebRTCService.getLocalMedia(isVideoCall.value);
           if (!mediaResult.success) {
             throw mediaResult.error;
           }
@@ -280,7 +297,7 @@ socket.value = io("https://webcall.vippinterstis.com:8000", {
 
           // S'assurer que les états sont correctement définis avant de lancer l'appel
           remoteUserId.value = data.clientId;
-          isVideoCall.value = true;
+          // isVideoCall.value est déjà défini depuis le token
           callStatus.value = "outgoing";
           isInCall.value = true;
           isIncomingCall.value = false;
@@ -344,6 +361,42 @@ const handleCallInitiation = (targetUserId, withVideo) => {
   isInCall.value = true;
   isIncomingCall.value = false;
 };
+/**
+ * Prépare l'avatar en arrière-plan côté agent
+ */
+const prepareAvatar = async () => {
+  if (!agentSex.value) {
+    console.warn('[AVATAR PREP] Pas de sexe d\'agent défini');
+    return;
+  }
+
+  try {
+    console.log('[AVATAR PREP] Démarrage préparation avatar pour agent', agentSex.value);
+    
+    // Sélectionner l'avatar selon le sexe
+    const avatarsByGender = {
+      male: ['0107迈克交互', '0307大卫交互', '20250327乔治交互'],
+      female: ['0325露西交互修复绿边', '0325苏菲交互修复绿边']
+    };
+    
+    const genderKey = agentSex.value?.toLowerCase() === 'female' ? 'female' : 'male';
+    const avatars = avatarsByGender[genderKey];
+    const selectedAvatar = avatars[Math.floor(Math.random() * avatars.length)];
+    
+    console.log('[AVATAR PREP] Avatar sélectionné:', selectedAvatar);
+    
+    // Pré-initialiser l'avatar (sans l'afficher)
+    await VirtualAvatarService.preInitialize(selectedAvatar);
+    
+    avatarReady.value = true;
+    console.log('[AVATAR PREP] ✓ Avatar prêt pour affichage');
+    
+  } catch (error) {
+    console.error('[AVATAR PREP] Erreur préparation:', error);
+    avatarReady.value = false;
+  }
+};
+
 /**
  *  fonction  appelée lorsque le flux vidéo à distance est reçu.
  */
@@ -448,12 +501,20 @@ const handleRecordPermissionResponse = (granted) => {
 <style scoped>
 .app-container {
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
+  width: 100dvw;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   font-family: "Inter", sans-serif;
+  position: fixed;
+  top: 0;
+  left: 0;
 }
 
 .controls-container {

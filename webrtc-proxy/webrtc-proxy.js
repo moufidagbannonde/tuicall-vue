@@ -29,7 +29,7 @@ app.get('/', (req, res) => {
 app.get('/openapi/interactive/listVhInfo', async (req, res) => {
   console.log('API: listVhInfo');
   try {
-    const response = await axios.get('https://37.64.205.84/openapi/interactive/listVhInfo', {
+    const response = await axios.get('https://avatar-ia.vippinterstis.com/openapi/interactive/listVhInfo', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers
@@ -47,7 +47,7 @@ app.get('/openapi/interactive/listVhInfo', async (req, res) => {
 app.get('/openapi/signature/gen', async (req, res) => {
   console.log('API: signature/gen');
   try {
-    const response = await axios.get('https://37.64.205.84/openapi/signature/gen', {
+    const response = await axios.get('https://avatar-ia.vippinterstis.com/openapi/signature/gen', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers
@@ -68,7 +68,7 @@ app.get('/openapi/interactive/listVhResourceWithStatus', async (req, res) => {
   console.log('Headers:', req.headers);
   
   try {
-    const response = await axios.get('https://37.64.205.84/openapi/interactive/listVhResourceWithStatus', {
+    const response = await axios.get('https://avatar-ia.vippinterstis.com/openapi/interactive/listVhResourceWithStatus', {
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         'signature': req.headers.signature || req.headers['signature'],
@@ -102,7 +102,7 @@ app.all(/^\/openapi\/(.*)/, async (req, res) => {
   try {
     const response = await axios({
       method: req.method,
-      url: `https://37.64.205.84${path}`,
+      url: `https://avatar-ia.vippinterstis.com${path}`,
       headers: { 
         'Subscription-Key': 'ff9eed6d-2331-44ff-9fca-7d7c06300ae9',
         ...req.headers,

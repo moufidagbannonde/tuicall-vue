@@ -10,7 +10,7 @@ export default defineConfig({
     
     proxy: {
       '/api': {
-        target: 'https://37.64.205.84:3000',
+        target: 'https://avatar-ia.vippinterstis.com:3000',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => {
@@ -39,7 +39,7 @@ export default defineConfig({
             const subscriptionKey = req.headers['subscription-key'];
             console.log('→ Requête proxy /api:', req.method, req.url);
             
-            proxyReq.setHeader('Host', '37.64.205.84');
+            proxyReq.setHeader('Host', 'avatar-ia.vippinterstis.com');
             proxyReq.setHeader('Accept', 'application/json');
             proxyReq.setHeader('Connection', 'keep-alive');
             
@@ -63,7 +63,7 @@ export default defineConfig({
       
       // NOUVEAU: Proxy pour /openapi (utilisé par le SDK)
       '/openapi': {
-        target: 'https://37.64.205.84:3000',
+        target: 'https://avatar-ia.vippinterstis.com:3000',
         changeOrigin: true,
         secure: false,
         ws: true, // IMPORTANT: Support WebSocket pour /openapi/interactive/websocket
@@ -93,7 +93,7 @@ export default defineConfig({
               hasSignature: !!signature
             });
             
-            proxyReq.setHeader('Host', '37.64.205.84');
+            proxyReq.setHeader('Host', 'avatar-ia.vippinterstis.com');
             proxyReq.setHeader('Accept', 'application/json');
             proxyReq.setHeader('Subscription-Key', subscriptionKey);
             
@@ -121,8 +121,8 @@ export default defineConfig({
           // IMPORTANT: Gérer les WebSocket upgrades
           proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
             console.log('🔌 WebSocket upgrade /openapi:', req.url);
-            proxyReq.setHeader('Origin', 'https://37.64.205.84');
-            proxyReq.setHeader('Host', '37.64.205.84');
+            proxyReq.setHeader('Origin', 'https://avatar-ia.vippinterstis.com');
+            proxyReq.setHeader('Host', 'avatar-ia.vippinterstis.com');
           });
           
           proxy.on('open', (proxySocket) => {
@@ -159,7 +159,7 @@ export default defineConfig({
       
       // NOUVEAU: Proxy pour Socket.IO AVATAR (SDK vers serveur distant)
       '/avatar-socket': {
-        target: 'https://37.64.205.84:3000',
+        target: 'https://avatar-ia.vippinterstis.com:3000',
         changeOrigin: true,
         secure: false,
         ws: true,
@@ -171,7 +171,7 @@ export default defineConfig({
           
           proxy.on('proxyReqWs', (proxyReq, req, socket, options, head) => {
             console.log('[AVATAR SOCKET] 🎭 WebSocket upgrade vers serveur avatar:', req.url);
-            proxyReq.setHeader('Host', '37.64.205.84');
+            proxyReq.setHeader('Host', 'avatar-ia.vippinterstis.com');
           });
           
           proxy.on('open', (proxySocket) => {

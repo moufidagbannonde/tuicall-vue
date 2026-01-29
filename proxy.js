@@ -7,7 +7,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const app = express();
 
 app.use('/wss', createProxyMiddleware({
-    target: 'wss://37.64.205.84:443',
+    target: 'wss://avatar-ia.vippinterstis.com:443',
     ws: true,               // important pour WebSocket
     changeOrigin: true,
     secure: false           // ignore le certificat auto-signé

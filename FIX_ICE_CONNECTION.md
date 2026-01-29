@@ -41,14 +41,14 @@ iceServers: [
   
   // Serveur TURN principal (votre serveur)
   {
-    urls: "turn:37.64.205.85:3478",
-    username: "webrtc",
-    credential: "VippInterstis@123",
+    urls: import.meta.env.VITE_STURN_SERVER,
+    username: import.meta.env.VITE_STURN_USERNAME,
+    credential: import.meta.env.VITE_STURN_PASSWORD,
   },
   {
-    urls: "turn:37.64.205.85:3478?transport=tcp",
-    username: "webrtc",
-    credential: "VippInterstis@123",
+    urls: `${import.meta.env.VITE_STURN_SERVER}?transport=tcp`,
+    username: import.meta.env.VITE_STURN_USERNAME,
+    credential: import.meta.env.VITE_STURN_PASSWORD,
   },
   
   // Serveurs TURN de secours (openrelay)
