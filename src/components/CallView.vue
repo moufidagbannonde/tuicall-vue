@@ -33,8 +33,8 @@
     </div>
     <!-- Affichage du flux audio/vidéo -->
     <div class="remote-stream-container relative">
-      <!-- Vidéo WebRTC cachée pour le client (seulement pour l'audio) -->
-      <video v-show="false" id="remoteVideo" ref="remoteVideo" autoplay playsinline
+      <!-- Vidéo WebRTC cachée pour le client (seulement pour recevoir le flux, audio désactivé) -->
+      <video v-show="false" id="remoteVideo" ref="remoteVideo" autoplay playsinline muted
         :class="{ 'screen-sharing': screenSharingActive }" @loadedmetadata="handleRemoteVideoLoaded"
         @playing="() => console.log('[VIDEO] En lecture, screenSharing:', screenSharingActive)"
         @canplay="handleRemoteVideoCanPlay"></video>
@@ -1058,6 +1058,9 @@ const handleRemoteVideoCanPlay = () => {
 };
 
 const forceEnableAudio = () => {
+  // Ne pas forcer l'audio pour le client (l'avatar gère l'audio)
+  if (props.userRole === 'client') return;
+  
   if (!remoteVideo.value) return;
 
   // CRITIQUE : Forcer l'audio à être activé

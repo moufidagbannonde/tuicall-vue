@@ -131,7 +131,7 @@ const userName = ref("");
 const currentUserId = ref("");
 const remoteUserId = ref("");
 const isInCall = ref(false);
-const isVideoCall = ref(false);
+const isVideoCall = ref(true);
 const callStatus = ref("idle"); // idle, outgoing, incoming, connected
 const isIncomingCall = ref(false);
 const localStream = ref(null);
@@ -425,7 +425,7 @@ const handleCallStatusChange = (status, userId, withVideo) => {
     callStatus.value = "idle";
     remoteUserId.value = "";
     isIncomingCall.value = false;
-    isVideoCall.value = false;
+    isVideoCall.value = true;
   }
 };
 
@@ -442,7 +442,7 @@ const handleCallEnded = () => {
   // currentUserId.value = '';
 
   isIncomingCall.value = false; // état de l'appel entrant
-  isVideoCall.value = false; // état de l'appel vidéo
+  isVideoCall.value = true; // état de l'appel vidéo
 };
 
 /**
