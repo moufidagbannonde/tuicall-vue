@@ -18,15 +18,45 @@
     <!-- Call Controls (quand l'appel n'est pas encore lancé) -->
 
     <div v-if="!isInCall && currentUserId" class="controls-container">
-      <!-- <h1 class="app-title">WebRTC Call</h1> -->
-      <!-- <CallControls @call-initiated="handleCallInitiation" /> -->
+      <!-- DEBUG: Afficher les valeurs pour diagnostic -->
+      <div style="background: red; color: white; padding: 10px; margin-bottom: 10px;">
+        DEBUG: userRole={{ userRole }}, currentUserId={{ currentUserId }}, isInCall={{ isInCall }}
+      </div>
+      
       <div class="user-id-display">
         <p>
           Votre ID: <span class="user-id">{{ currentUserId }}</span>
         </p>
         <p class="help-text">
-          Partagez cet ID avec vos contacts pour qu'ils puissent vous appeler
+          {{ userRole === 'client' ? 'Cliquez pour appeler un agent' : 'Partagez cet ID avec vos contacts pour qu\'ils puissent vous appeler' }}
         </p>
+        
+        <!-- Bouton d'appel pour le client -->
+        <button v-if="userRole === 'client' && !isSearchingAgent" @click="initiateCallToAgent" 
+                class="mt-4 w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors">
+          Appeler un agent
+        </button>
+        
+        <!-- État d'attente avec timer et bouton annuler -->
+        <div v-if="isSearchingAgent" class="mt-4 w-full">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <div class="flex items-center justify-center mb-2">
+              <svg class="animate-spin h-5 w-5 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span class="text-blue-800 font-medium">Recherche d'un agent...</span>
+            </div>
+            <p class="text-blue-600 text-sm mb-3">
+              Temps d'attente: {{ Math.floor(waitingDuration / 60) }}:{{ String(waitingDuration % 60).padStart(2, '0') }}
+            </p>
+            <p class="text-blue-500 text-xs mb-3">Vous serez connecté au prochain agent disponible</p>
+            <button @click="cancelWaiting" 
+                    class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm transition-colors">
+              Annuler l'attente
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <!-- Call View (quand l'appel) -->
@@ -142,6 +172,10 @@ const avatarReady = ref(false); // État de préparation de l'avatar
 const onlineUsers = ref([]); // Nouvelle variable pour suivre les utilisateurs en ligne
 const showRecordPermissionModal = ref(false);
 const recordRequesterId = ref(null); // ID de l'agent demandant l'enregistrement
+const isSearchingAgent = ref(false); // État de recherche d'agent
+const waitingTimeout = ref(null); // Timeout pour l'attente
+const waitingStartTime = ref(null); // Heure de début d'attente
+const waitingDuration = ref(0); // Durée d'attente en secondes
 
 /**
  * Decrypts encrypted data
@@ -191,50 +225,37 @@ function decryptData(encryptedData) {
  */
 onMounted(() => {
   const urlParams = new URLSearchParams(window.location.search);
-const token = urlParams.get("token");
-const role = urlParams.get("role");
+  const token = urlParams.get("token");
+  const role = urlParams.get("role");
 
-if (token) {
-  try {
-    const decryptedData = JSON.parse(decryptData(token));
-    const { agentId: decryptedAgentId, clientId: decryptedClientId, agentSex: decryptedAgentSex, withVideo } = decryptedData;
-    
-    agentId.value = decryptedAgentId;
-    clientId.value = decryptedClientId;
-    userRole.value = role;
-    isVideoCall.value = withVideo; // Définir le type d'appel dès l'initialisation
-    agentSex.value = decryptedAgentSex; // Stocker le sexe de l'agent
-    
-    // Maintenant vous avez accès à agentSex et withVideo aussi
-    console.log('Session data:', { agentId: agentId.value, clientId: clientId.value, role, agentSex: agentSex.value, withVideo });
+  if (token) {
+    try {
+      const decryptedData = JSON.parse(decryptData(token));
+      const { agentId: decryptedAgentId, clientId: decryptedClientId, agentSex: decryptedAgentSex, withVideo } = decryptedData;
+      
+      agentId.value = decryptedAgentId;
+      clientId.value = decryptedClientId;
+      userRole.value = role; // Définir le rôle ici et ne plus le redéfinir
+      isVideoCall.value = withVideo;
+      agentSex.value = decryptedAgentSex;
+      
+      console.log('Session data:', { agentId: agentId.value, clientId: clientId.value, role, agentSex: agentSex.value, withVideo });
 
-    if (agentId.value && role === "agent") {
-      initializeConnection(agentId.value);
-    } else if (clientId.value && role === "client") {
-      initializeConnection(clientId.value);
-      // Préparer l'avatar dès que le client se connecte
-      prepareAvatar();
-    } else {
-      console.error('Configuration invalide:', { agentId: agentId.value, clientId: clientId.value, role });
+      if (agentId.value && role === "agent") {
+        initializeConnection(agentId.value);
+      } else if (clientId.value && role === "client") {
+        initializeConnection(clientId.value);
+        prepareAvatar();
+      } else {
+        console.error('Configuration invalide:', { agentId: agentId.value, clientId: clientId.value, role });
+      }
+    } catch (error) {
+      console.error('Erreur lors du décryptage du token:', error);
     }
-  } catch (error) {
-    console.error('Erreur lors du décryptage du token:', error);
+  } else {
+    console.error('Token manquant dans l\'URL');
   }
-} else {
-  console.error('Token manquant dans l\'URL');
-}
-
 });
-
-// Écouteur pour la demande de permission d'enregistrement (côté Client)
-if (userRole.value === 'client') {
-  socket.value.on('request-record-permission', ({ from }) => { // `from` est l'ID de l'agent
-    if (isInCall.value && remoteUserId.value === from) { // Vérifier si la demande vient de l'interlocuteur actuel
-      recordRequesterId.value = from;
-      showRecordPermissionModal.value = true;
-    }
-  });
-}
 
 /**
  * Initialise la connexion avec l'ID spécifié
@@ -255,9 +276,8 @@ socket.value = io("https://webcall.vippinterstis.com:8000", {
 
   socket.value.on("connect", () => {
     console.log("Socket connected:", socket.value.id);
-    // Déterminer le type d'utilisateur
-    const role = new URLSearchParams(window.location.search).get("role");
-    const userType = role || "unknown";
+    // Utiliser le rôle déjà défini
+    const userType = userRole.value || "unknown";
 
     // Émettre un événement pour enregistrer l'utilisateur
     socket.value.emit("register", {
@@ -270,6 +290,16 @@ socket.value = io("https://webcall.vippinterstis.com:8000", {
       socket.value.emit("client-ready-for-call", {
         clientId: currentUserId.value,
         userType: userType,
+      });
+    }
+    
+    // Écouteur pour la demande de permission d'enregistrement (côté Client)
+    if (userType === 'client') {
+      socket.value.on('request-record-permission', ({ from }) => {
+        if (isInCall.value && remoteUserId.value === from) {
+          recordRequesterId.value = from;
+          showRecordPermissionModal.value = true;
+        }
       });
     }
   });
@@ -317,6 +347,29 @@ socket.value = io("https://webcall.vippinterstis.com:8000", {
   // Écouter les mises à jour des utilisateurs en ligne
   socket.value.on("online_users", (users) => {
     onlineUsers.value = users;
+  });
+  
+  // Écouter la réponse d'agent disponible
+  socket.value.on('agent-found', (data) => {
+    console.log('Agent trouvé:', data);
+    
+    // Nettoyer l'attente
+    if (waitingTimeout.value) {
+      clearTimeout(waitingTimeout.value);
+      waitingTimeout.value = null;
+    }
+    isSearchingAgent.value = false;
+    
+    // Démarrer l'appel avec l'agent
+    remoteUserId.value = data.agentId;
+    callStatus.value = "outgoing";
+    isInCall.value = true;
+    isIncomingCall.value = false;
+  });
+  
+  socket.value.on('no-agent-available', () => {
+    console.log('Aucun agent disponible pour le moment');
+    // Ne pas arrêter la recherche, continuer à attendre
   });
 
   // Initialiser le service WebRTC avec la socket et le userId
@@ -496,6 +549,80 @@ const handleRecordPermissionResponse = (granted) => {
   showRecordPermissionModal.value = false;
   recordRequesterId.value = null;
 };
+
+/**
+ * Initie un appel vers le premier agent disponible
+ */
+const initiateCallToAgent = async () => {
+  if (isSearchingAgent.value) return;
+  
+  try {
+    isSearchingAgent.value = true;
+    waitingStartTime.value = Date.now();
+    waitingDuration.value = 0;
+    
+    // Démarrer le compteur d'attente
+    const waitingInterval = setInterval(() => {
+      if (!isSearchingAgent.value) {
+        clearInterval(waitingInterval);
+        return;
+      }
+      waitingDuration.value = Math.floor((Date.now() - waitingStartTime.value) / 1000);
+    }, 1000);
+    
+    // Timeout de 5 minutes
+    waitingTimeout.value = setTimeout(() => {
+      clearInterval(waitingInterval);
+      cancelWaiting();
+      alert('Aucun agent n\'est disponible après 5 minutes d\'attente. Veuillez réessayer plus tard.');
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    // Demander les permissions média d'abord
+    const mediaResult = await WebRTCService.getLocalMedia(isVideoCall.value);
+    if (!mediaResult.success) {
+      throw mediaResult.error;
+    }
+    localStream.value = mediaResult.stream;
+    
+    // Demander un agent disponible au serveur
+    socket.value.emit('request-available-agent', {
+      clientId: currentUserId.value,
+      isVideoCall: isVideoCall.value
+    });
+    
+  } catch (error) {
+    console.error('Erreur lors de l\'initiation de l\'appel:', error);
+    cancelWaiting();
+    alert('Impossible d\'accéder à la caméra ou au microphone.');
+  }
+};
+
+/**
+ * Annule l'attente d'un agent
+ */
+const cancelWaiting = () => {
+  isSearchingAgent.value = false;
+  waitingDuration.value = 0;
+  waitingStartTime.value = null;
+  
+  if (waitingTimeout.value) {
+    clearTimeout(waitingTimeout.value);
+    waitingTimeout.value = null;
+  }
+  
+  // Informer le serveur de l'annulation
+  if (socket.value) {
+    socket.value.emit('cancel-agent-request', {
+      clientId: currentUserId.value
+    });
+  }
+  
+  // Arrêter le flux média si démarré
+  if (localStream.value) {
+    localStream.value.getTracks().forEach(track => track.stop());
+    localStream.value = null;
+  }
+};
 </script>
 
 <style scoped>
@@ -522,39 +649,32 @@ const handleRecordPermissionResponse = (granted) => {
   flex-direction: column;
   align-items: center;
   gap: 2rem;
-}
-
-.app-title {
-  color: white;
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  width: 100%;
+  padding: 0 1rem;
 }
 
 .user-id-display {
-  background-color: rgba(255, 255, 255, 0.9);
-  padding: 1rem;
-  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: 1rem;
   text-align: center;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  width: 100%;
 }
 
 .user-id {
   font-weight: bold;
   color: #4f46e5;
+  font-size: 1.1rem;
 }
 
 .help-text {
   font-size: 0.875rem;
   color: #6b7280;
   margin-top: 0.5rem;
-}
-
-.incoming-call-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  line-height: 1.5;
 }
 </style>

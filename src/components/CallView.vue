@@ -144,12 +144,20 @@
             d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 101.06-1.06l-18-18zM22.5 17.69c0 .471-.202.86-.504 1.124l-9.309-9.31c.043-.043.086-.084.129-.124H21a1.5 1.5 0 011.5 1.5v6.75z" />
         </svg>
       </button>
-      <!-- partager l'écran -->
-      <button @click="startScreenShare" class="control-btn"
-        v-if="currentCallStatus === 'connected' && userRole !== 'agent'">
+      <!-- switcher caméra (mobile uniquement) -->
+      <button @click="switchCamera" class="control-btn" v-if="isVideoCall && isMobile">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-          <path
-            d="M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm0 2v12h16V6H4zm8 3l4 4h-3v4h-2v-4H8l4-4z" />
+          <path d="M12 9a3.75 3.75 0 100 7.5A3.75 3.75 0 0012 9z" />
+          <path fill-rule="evenodd" d="M9.344 3.071a49.52 49.52 0 015.312 0c.967.052 1.83.585 2.332 1.39l.821 1.317c.24.383.645.643 1.11.71.386.054.77.113 1.152.177 1.432.239 2.429 1.493 2.429 2.909V18a3 3 0 01-3 3H6a3 3 0 01-3-3V9.574c0-1.416.997-2.67 2.429-2.909.382-.064.766-.123 1.151-.178a1.56 1.56 0 001.11-.71l.822-1.315a2.942 2.942 0 012.332-1.39zM6.75 12.75a5.25 5.25 0 1110.5 0 5.25 5.25 0 01-10.5 0zm12-1.5a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd" />
+          <path d="M15.75 8.25a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75z" />
+        </svg>
+      </button>
+      <!-- capture d'écran -->
+      <button @click="takeScreenshot" class="control-btn"
+        v-if="currentCallStatus === 'connected' && userRole === 'agent'">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+          <path d="M12 9a3.75 3.75 0 100 7.5A3.75 3.75 0 0012 9z" />
+          <path fill-rule="evenodd" d="M9.344 3.071a49.52 49.52 0 015.312 0c.967.052 1.83.585 2.332 1.39l.821 1.317c.24.383.645.643 1.11.71.386.054.77.113 1.152.177 1.432.239 2.429 1.493 2.429 2.909V18a3 3 0 01-3 3H6a3 3 0 01-3-3V9.574c0-1.416.997-2.67 2.429-2.909.382-.064.766-.123 1.151-.178a1.56 1.56 0 001.11-.71l.822-1.315a2.942 2.942 0 012.332-1.39zM6.75 12.75a5.25 5.25 0 1110.5 0 5.25 5.25 0 01-10.5 0zm12-1.5a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd" />
         </svg>
       </button>
       <!-- mettre fin à l'appel -->
@@ -185,6 +193,19 @@
       </button>
     </div>
   </div>
+  
+  <!-- Chat Panel -->
+  <ChatPanel 
+    :socket="socket" 
+    :current-user-id="currentUserId" 
+    :remote-user-id="remoteUserId" 
+    :is-in-call="currentCallStatus === 'connected'"
+    :user-role="userRole"
+    :remote-stream="remoteStream"
+    :is-muted="isMuted"
+    :call-timer="formattedCallDuration"
+    @toggle-mute="toggleMute"
+    @close-chat="() => {}" />
 </template>
 
 <script setup>
@@ -194,6 +215,7 @@ import { useToast } from "vue-toastification";
 import Peer from "peerjs";
 import VirtualAvatarService from '../services/VirtualAvatarService';
 import avatarBg from '../assets/Firefly_Arrière-plan architectural haut de gamme pour bureau de direction moderne, environnem 57409.png';
+import ChatPanel from './ChatPanel.vue';
 
 /**
  * transfert de flux d'audio ou vidéo
@@ -278,6 +300,8 @@ const localStream = ref(null);
 const remoteStream = ref(null);
 const isMuted = ref(false);
 const isVideoOff = ref(false);
+const isMobile = ref(window.innerWidth < 768);
+const currentFacingMode = ref('user'); // 'user' = avant, 'environment' = arrière
 
 // création d'une référence locale pour l'état de la vidéo
 const localIsVideoCall = ref(props.isVideoCall);
@@ -614,26 +638,30 @@ const OLD_handleRemoteStream_BACKUP = (stream) => {
  */
 const handleCallStatusChange = (status, userId, withVideo) => {
   console.log('[HANDLE STATUS] Reçu:', status, '| userId:', userId, '| video:', withVideo);
+  
+  // Ne pas changer le statut si on est déjà connecté et qu'on reçoit encore 'connected'
+  if (currentCallStatus.value === 'connected' && status === 'connected') {
+    console.log('[TIMER] Déjà connecté, pas de redémarrage du timer');
+    return;
+  }
+  
   currentCallStatus.value = status;
 
-  // Démarrer le timer quand l'appel est connecté
-  if (status === "connected") {
-    // S'assurer qu'il n'y a pas déjà un timer en cours
-    if (timerInterval.value) {
-      clearInterval(timerInterval.value);
-    }
-
+  // Démarrer le timer UNIQUEMENT au premier 'connected'
+  if (status === "connected" && !timerInterval.value) {
     callStartTime.value = Date.now();
     timerInterval.value = setInterval(() => {
       callDuration.value = Math.floor(
         (Date.now() - callStartTime.value) / 1000
       );
     }, 1000);
+    console.log('[TIMER] Timer démarré');
   } else if (status === "ended" || status === "rejected") {
     // Arrêter le timer si l'appel est terminé ou rejeté
     if (timerInterval.value) {
       clearInterval(timerInterval.value);
       timerInterval.value = null;
+      console.log('[TIMER] Timer arrêté');
     }
     callDuration.value = 0;
     callStartTime.value = null;
@@ -1631,6 +1659,44 @@ const toggleVideo = () => {
     props.remoteUserId,
     props.currentUserId
   );
+};
+
+/**
+ * Prend une capture d'écran de la vidéo du client
+ */
+const takeScreenshot = () => {
+  try {
+    const video = remoteVideo.value;
+    if (!video || !remoteStream.value) {
+      toast.error('Aucune vidéo à capturer');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Télécharger l'image
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `capture-${props.remoteUserId}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success('Capture d\'\u00e9cran sauvegardée');
+    }, 'image/png');
+    
+  } catch (error) {
+    console.error('Erreur capture:', error);
+    toast.error('Erreur lors de la capture');
+  }
 };
 </script>
 
